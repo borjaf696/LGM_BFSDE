@@ -17,7 +17,7 @@ $$\overline{V}_0 = \overline{V}^i[0]$$
 
 $$\overline{V}_{t+1} = \overline{V}_t + \frac{\delta F(X)}{\delta x_t}(x_{t + 1} - x_{t})$$
 
-$$\mathcal{L}(\overline{V}, \hat{V}) = \beta_1 (\hat{V}_n - \phi(n, x_n))^2 + \beta_2(\hat{V}_n - \frac{\delta F(X)}{\delta x_n}) + \sum_{i = 1}^{n - 1}(\overline{V}_i - \hat{V}_i)^2  $$
+$$\mathcal{L}(\overline{V}, \hat{V}) = \beta_1 \cdot (\hat{V}_n - \phi(n, x_n))^2 + \beta_2\cdot (\hat{V}_n - \frac{\delta F(X)}{\delta x_n})^2 + \sum_{i = 1}^{n - 1}(\overline{V}_i - \hat{V}_i)^2  $$
 
 ## Todo:
 
