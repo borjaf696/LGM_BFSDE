@@ -31,3 +31,29 @@ Problema:
     * Calcular la función de pérdida, y aquí viene el problema como calculamos el gradiente para los pesos de las redes dado el loss que tenemos. Al estar en distintas arquitecturas aquí se complica la cosa, ¿no? 
         * Esto tengo que mirarlo porque igual si se puede hacer. Si hacemos las predicciones de todas las redes en un GradientTape igual si podemos calcular de manera sencilla la pérdida e incorporarla. Intento hacerlo para antes del miércoles.
 * Una opción C es eliminar el término $\sum_{i = 1}^{n - 1}(\overline{V}_i - \hat{V}_i)^2$ y cambiarlo por $\overline{V}_0 - \hat{V}_0$. Esto simplificaría mucho todo.
+
+## Notas reunión Álvaro 20230222
+
+Fácil y sencillo al final resulta que el $D(T)$ representaba $d(t)$ y venía a decir que tenía que ser posible recuperar el valor de descuento en cualquier punto de la simulación.
+
+#### Notas reunión
+
+* Comprobar derivadas (analíticas y derivadas parciales)
+    * Revisando la Jacobiana he descubierto un problema con los valores, cuando en vez de un ejemplo se tienen muchos la Jacobiana sale totalmente descolocada
+* Comparar cada una de las componentes del error:
+    * Magnitud de las derivadas
+    * En el último término aplican los $n-1$ pasos.
+* Comparar técnicas de nn:
+    * Secuencial
+    * Punto a punto
+* Empezar a trabajar con un payoff más complejo
+    * IRS:
+        * $T_N$, 5 años
+        * Con pagos anuales: $T_i$
+    * 
+* Validación:
+    * Construcción del dataset de validación y comparación de errores:
+        * 1000 train y 100 validación
+    * Cambiar estructura de la red:
+        * Bias 
+        * Desviación

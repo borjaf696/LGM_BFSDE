@@ -8,12 +8,9 @@ from tensorflow import keras
 from utils.utils.utils import FinanceUtils
 
 # TODO: Write better method definitions
+# TODO: Write better method definitions
 class LGM_model(tf.keras.Model):
-    """_summary_
 
-    Args:
-        tf (_type_): _description_
-    """
     def __init__(
         self,
         n_steps,
@@ -34,13 +31,17 @@ class LGM_model(tf.keras.Model):
         """
         super(LGM_model, self).__init__(name=name, **kwargs)
         self.N = n_steps
-        input_layer = keras.Input(shape=(n_steps, 1, ), name='input_nn')
+        input_layer = keras.Input(shape=(n_steps, ), name='input_nn')
         x = layers.Layer(trainable = False, name = 'adhoc_structure_layer')(input_layer)
         num_layer = 0
         if is_sequential:
             x = layers.GRU(intermediate_dim, name = 'sequential_layer')(x)
             num_layer += 1
-        output_layer = layers.Dense(units = n_steps, activation = 'relu', name = 'first_dense')(x)
+        initializer = tf.keras.initializers.GlorotUniform(seed = 6543210)
+        output_layer = layers.Dense(units = n_steps, 
+                                    activation = 'relu', 
+                                    name = 'first_dense',
+                                    kernel_initializer=initializer)(x)
         self._custom_model = keras.Model(
             inputs=[input_layer],
             outputs=[output_layer],
@@ -48,6 +49,14 @@ class LGM_model(tf.keras.Model):
         )
         # Metrics tracker
         self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+        # Internal loss control
+        self._loss_tracker_t1 = tf.keras.metrics.Mean(name="loss")
+        self._loss_tracker_t2 = tf.keras.metrics.Mean(name="loss")
+        self._loss_tracker_t3 = tf.keras.metrics.Mean(name="loss")
+        # Internal loss results
+        self._loss_tracker_t1_array = []
+        self._loss_tracker_t2_array = []
+        self._loss_tracker_t3_array = []
         # Duration each step
         self._deltaT = T / self.N
         # Constantes:
@@ -106,7 +115,7 @@ class LGM_model(tf.keras.Model):
             x = tf.Variable(x, trainable = True)
             v = self.predict(x)
             predictions = tf.Variable(self._predictions, trainable = False)   
-            loss = self._loss_lgm(x = x, v = v, predictions = predictions, N_steps = N_steps)
+            loss = self._loss_lgm(x = x, v = v, predictions = predictions, N_steps = self.N)
         # Get trainable vars
         trainable_vars = self.trainable_weights
         grads = tape.gradient(loss, trainable_vars)
@@ -128,7 +137,7 @@ class LGM_model(tf.keras.Model):
             print(f'Optimizer set to {optimizer}')
             self._optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
     
-    def custom_train_step(self, X, y = None, epoch = 0):
+    def custom_train_step(self, X, y = None, epoch = 0, start_time = None):
         """_summary_
 
         Args:
@@ -154,9 +163,37 @@ class LGM_model(tf.keras.Model):
         # Compute metrics
         self.loss_tracker.update_state(loss)
         if epoch % 100 == 0:
-            print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
+            if start_time is None:
+                print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
+            else:
+                import time
+                print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()} Time per epoch: {(time.time() - start_time) / (epoch + 1)}s')
+                print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
+                self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
+                self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
+                self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())         
         # Store losses
-        return float(self.loss_tracker.result())
+        return float(self.loss_tracker.result()), float(self._loss_tracker_t1.result()), float(self._loss_tracker_t2.result()), float(self._loss_tracker_t3.result())
+    
+    def get_losses_internal(self):
+        """_summary_
+
+        Returns:
+            _type_: _description_
+        """
+        return {'strike_loss': float(self._loss_tracker_t1.result()), 
+                'derivative_strike_loss': float(self._loss_tracker_t2.result()), 
+                'steps_error_loss': float(self._loss_tracker_t3.result())}
+    
+    def get_losses_internal_array(self):
+        """_summary_
+
+        Returns:
+            _type_: _description_
+        """
+        return {'strike_loss': self._loss_tracker_t1_array, 
+                'derivative_strike_loss': self._loss_tracker_t2_array, 
+                'steps_error_loss': self._loss_tracker_t3_array}
 
     def _get_dv_dx(self, features):
         """_summary_
@@ -211,7 +248,7 @@ class LGM_model(tf.keras.Model):
         Returns:
             _type_: _description_
         """
-        betas = [1.0, 1.0, 1.0]
+        betas = [1.0, 1/3, 1.0]
         # Careful: Using global variable...
         len_path = N_steps
         # For f and f'
@@ -219,7 +256,7 @@ class LGM_model(tf.keras.Model):
         n_idx = int(len_path)
         # Loss given the strike function
         tn = np.float64(self._deltaT * len_path)
-        strike_loss = betas[0] * (predictions[:, -1] - FinanceUtils.zero_bond_coupon(xn_tensor, tn, self._ct))**2
+        strike_loss = (predictions[:, -1] - FinanceUtils.zero_bond_coupon(xn_tensor, tn, self._ct))**2
         # Autodiff f
         xn = tf.Variable(x[:, -1], name = 'xn', trainable = True)
         tn = tf.Variable(np.float64(self._deltaT * len_path), name = 'tn', trainable=False)
@@ -247,6 +284,14 @@ class LGM_model(tf.keras.Model):
         derivative_loss = betas[1] * (self._get_dv_dxi(n_idx - 1) - df_dxn)**2
         # Epoch error per step
         error_per_step = betas[2] * tf.reduce_sum(tf.math.squared_difference(v[:, :-1], predictions[:, :-1]), axis = 1)
+        # Record internal losses
+        self._loss_tracker_t1.update_state(strike_loss)
+        self._loss_tracker_t2.update_state(derivative_loss)
+        self._loss_tracker_t3.update_state(error_per_step)
+        # Weigth the errors
+        strike_loss *= betas[0]
+        derivative_loss *= betas[1]
+        error_per_step *= betas[2]
         
         return tf.math.add(error_per_step, tf.math.add(strike_loss, derivative_loss))
 
