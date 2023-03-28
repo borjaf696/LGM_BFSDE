@@ -16,7 +16,6 @@ class LGM_model(tf.keras.Model):
         n_steps,
         T = 0,
         intermediate_dim=64,
-        is_sequential = False,
         name="LGM_NN_model",
         verbose = False,
         **kwargs
@@ -31,14 +30,17 @@ class LGM_model(tf.keras.Model):
         """
         super(LGM_model, self).__init__(name=name, **kwargs)
         self.N = n_steps
-        input_layer = keras.Input(shape=(n_steps, ), name='input_nn')
-        x = layers.Layer(trainable = False, name = 'adhoc_structure_layer')(input_layer)
-        num_layer = 0
-        if is_sequential:
-            x = layers.GRU(intermediate_dim, name = 'sequential_layer')(x)
-            num_layer += 1
+        # Local initializer
         initializer = tf.keras.initializers.GlorotUniform(seed = 6543210)
-        output_layer = layers.Dense(units = n_steps, 
+        # Tf model structure
+        input_layer = keras.Input(shape=(n_steps, 1), name='input_nn')
+        x = layers.GRU(intermediate_dim, 
+                       kernel_initializer = initializer,
+                       dropout = 0.2,
+                       input_shape = (n_steps, 1),
+                       return_sequences = True,
+                       name = 'sequential_layer')(input_layer)
+        output_layer = layers.Dense(units = 1, 
                                     activation = 'relu', 
                                     name = 'first_dense',
                                     kernel_initializer=initializer)(x)
@@ -60,7 +62,9 @@ class LGM_model(tf.keras.Model):
         # Duration each step
         self._deltaT = T / self.N
         # Constantes:
-        self._ct = FinanceUtils.C(T, sigma = FinanceUtils.sigma)
+        self._ct = np.float64(
+            FinanceUtils.C(T, sigma = FinanceUtils.sigma)
+        )
         # Status variables
         self._grads, self._predictions = None, None
         # Verbose
@@ -137,7 +141,7 @@ class LGM_model(tf.keras.Model):
             print(f'Optimizer set to {optimizer}')
             self._optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
     
-    def custom_train_step(self, X, y = None, epoch = 0, start_time = None):
+    def custom_train_step(self, X, y = None, batch = 0, epoch = 0, start_time = None):
         """_summary_
 
         Args:
@@ -167,7 +171,7 @@ class LGM_model(tf.keras.Model):
                 print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
             else:
                 import time
-                print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()} Time per epoch: {(time.time() - start_time) / (epoch + 1)}s')
+                print(f'Epoch {epoch} Batch {batch} Mean loss {self.loss_tracker.result()} Time per epoch: {(time.time() - start_time) / (epoch + 1)}s')
                 print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
                 self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
                 self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
@@ -214,7 +218,7 @@ class LGM_model(tf.keras.Model):
             log_file = 'logs/20230217/grads_model.log'
             with open(log_file, 'a+') as f:
                 f.write(f'Grads given X:\n')
-                shape_x, shape_y = features.shape
+                shape_x, shape_y, _ = features.shape
                 for x_i in range(shape_x):
                     for y_i in range(shape_y):
                         f.write(f'{features[x_i, y_i]},')
@@ -248,7 +252,7 @@ class LGM_model(tf.keras.Model):
         Returns:
             _type_: _description_
         """
-        betas = [1.0, 1/3, 1.0]
+        betas = [1.0, 1.0, 1.0]
         # Careful: Using global variable...
         len_path = N_steps
         # For f and f'
@@ -256,7 +260,8 @@ class LGM_model(tf.keras.Model):
         n_idx = int(len_path)
         # Loss given the strike function
         tn = np.float64(self._deltaT * len_path)
-        strike_loss = (predictions[:, -1] - FinanceUtils.zero_bond_coupon(xn_tensor, tn, self._ct))**2
+        function_at_strike = FinanceUtils.zero_bond_coupon(xn_tensor, tn, self._ct)
+        strike_loss = tf.square(tf.subtract(predictions[:, -1], function_at_strike))
         # Autodiff f
         xn = tf.Variable(x[:, -1], name = 'xn', trainable = True)
         tn = tf.Variable(np.float64(self._deltaT * len_path), name = 'tn', trainable=False)
@@ -305,16 +310,21 @@ class LGM_model(tf.keras.Model):
             _type_: _description_
         """
         # Steps
-        samples, N = X.shape
+        samples, _, _ = X.shape
         # Swaping option at strike
-        v = np.zeros((samples,N))
+        v = np.zeros((samples, self.N, 1), dtype = np.float64)
         predictions = self._custom_model(X)
         # Keep only the first value predicted
-        v[:, 0] = predictions[:, 0]
+        v[:, 0, :] = predictions[:, 0, :]
         # Get the gradients
         grads = self._get_dv_dx(X)
         # Do the iterative process
+        second_term = np.zeros((samples, self.N, 1))
         for i in range(0, self.N - 1):
-            v[:, i + 1] = tf.math.add(v[:, i], tf.math.multiply(grads[:, i], tf.math.subtract(X[:, i + 1], X[:, i])))
-            
-        return v, predictions
+            second_term[:, i + 1, :] = tf.math.multiply(grads[:, i, :], tf.math.subtract(X[:, i + 1, :], X[:, i]))
+            v[:, i + 1, :] = tf.math.add(v[:, i, :], second_term[:, i + 1, :])
+        '''print(f'Grads: {grads} {grads.shape}')
+        print(f'Predictions: {predictions}, {predictions.shape}')
+        print(f'V: {v}, {v.shape}')'''
+        v = tf.convert_to_tensor(v)
+        return tf.reshape(v, (samples, self.N, 1)), predictions

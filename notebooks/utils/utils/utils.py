@@ -1,6 +1,57 @@
 import tensorflow as tf
 import numpy as np
 
+class MLUtils():
+    import pandas as pd
+    from sklearn.base import BaseEstimator, TransformerMixin
+    ## TODO:
+    # ------ Adapt fit to work only with training and then transform given the
+    # ------ the previous transformation
+    class NormalizeColumns(BaseEstimator, TransformerMixin):
+        """ S-normalization
+
+        Args:
+            BaseEstimator (_type_): _description_
+            TransformerMixin (_type_): _description_
+        """
+        def __init__(self, columns=None):
+            self.columns = columns
+            self.__sufix = '_transformed'
+        
+        def fit(self, X, y=None):
+            self.__mean = np.mean(X, axis = 0)
+            self.__std = np.std(X, axis = 0)
+            return self
+
+        def transform(self, X, y=None):
+            cols_to_transform = list(X.columns)
+
+            if self.columns:
+                cols_to_transform = self.columns
+            cols_renamed = []
+            for column in cols_to_transform:
+                cols_renamed.append(
+                    column + self.__sufix
+                )
+            
+            X[cols_renamed] = (X[cols_to_transform] - self.__mean) / (self.__std)
+            return X
+    
+    @staticmethod
+    def get_pipeline(transformations = None):
+        from sklearn.pipeline import Pipeline
+        transformation_map = {
+            'normalization': MLUtils.NormalizeColumns()
+        }
+        pipeline_steps = []
+        for transformation in transformations:
+            pipeline_steps.append(
+                (transformation, transformation_map[transformation])
+            )
+        pipe = Pipeline(steps = pipeline_steps)
+        return pipe
+            
+
 class FinanceUtils():
     @staticmethod
     def sigma(t, sigma_0 = 0.0075):
