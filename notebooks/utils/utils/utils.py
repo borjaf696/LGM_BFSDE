@@ -1,6 +1,51 @@
 import tensorflow as tf
 import numpy as np
 
+class MathUtils():
+    
+    @staticmethod
+    def custom_derivative_model(x, model, multioutput = True, mode = 'centered'):
+        h = 1e-1
+        # Size x
+        x_dim, y_dim = x.shape
+        # Gradient vector
+        if multioutput:
+            gradient = np.zeros((x_dim, y_dim, y_dim))
+        else:
+            gradient = np.zeros((x_dim, y_dim, 1))
+        for i in range(y_dim):
+            # Vector for partial derivative estimation
+            offset_tensor = np.zeros((x_dim, y_dim), dtype = np.float64)
+            offset_tensor[:, i] = h
+            offset_tensor = tf.convert_to_tensor(offset_tensor,
+                                                dtype = np.float64)
+            # Constantes:
+            denominator = h
+            if mode == 'progressive':
+                numerator = model(
+                    tf.math.add(x, offset_tensor)
+                ) - model(
+                    x
+                ) 
+            elif mode == 'regressive':
+                numerator = model(
+                    x
+                ) - model(
+                    tf.math.subtract(x, offset_tensor)
+                )
+            elif mode == 'centered':
+                numerator = tf.math.subtract(
+                    model(
+                        tf.math.add(x, offset_tensor)
+                    ), model(
+                        tf.math.subtract(x, offset_tensor)
+                    )
+                )
+            denominator = 2 * h
+            gradient [:, i, :] = numerator / denominator
+        gradient = tf.convert_to_tensor(gradient,
+                                            dtype = np.float64)
+        return gradient
 class MLUtils():
     import pandas as pd
     from sklearn.base import BaseEstimator, TransformerMixin
@@ -67,7 +112,7 @@ class FinanceUtils():
         return sigma_0 + (t // 2) * 0.0005
     
     @staticmethod
-    def C(t, sigma = sigma):
+    def C(t, sigma_value = 0.0075):
         """_summary_
 
         Args:
@@ -78,7 +123,8 @@ class FinanceUtils():
             _type_: _description_
         """
         import scipy.integrate as integrate
-        return integrate.quad(lambda x: sigma(x)**2, 0, t)[0]    
+        return integrate.quad(lambda x: FinanceUtils.sigma(t = x, 
+                                              sigma_0 = sigma_value)**2, 0, t)[0]    
     
     @staticmethod
     @tf.function
@@ -147,6 +193,22 @@ class ZeroBound():
         """
         return tf.math.multiply(1/ZeroBound.D_tensor(t), tf.math.exp(tf.math.add(tf.math.multiply(ZeroBound.H_tensor(t), xt), 0.5 * tf.math.square(ZeroBound.H_tensor(t)) * ct)))
     @staticmethod
+    def Z_tensor(xt, t, T, ct = None):
+        """_summary_
+
+        Args:
+            xt (_type_): _description_
+            t (_type_): _description_
+            T (_type_): _description_
+            ct (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
+        assert ct is not None
+        T = np.float64(T)
+        return ZeroBound.D_tensor(T) * tf.math.exp(-0.5 * ZeroBound.H_tensor(T)**2 * ct - ZeroBound.H_tensor(T)*xt) * ZeroBound.N_tensor(t, xt, ct)
+    @staticmethod
     def D(t, r = 0.03):
         """_summary_
 
@@ -198,3 +260,15 @@ class ZeroBound():
         """
         assert ct is not None
         return ZeroBound.D(T) * np.exp(-0.5 * ZeroBound.H(T)**2 * ct - ZeroBound.H(T)*xt) * ZeroBound.N(t, xt, ct)
+    @staticmethod
+    def exponent(xt, t, T, ct = None):
+        """_summary_
+
+        Args:
+            xt (_type_): _description_
+            t (_type_): _description_
+            T (_type_): _description_
+            ct (_type_, optional): _description_. Defaults to None.
+        """
+        assert ct is not None
+        return np.exp(-0.5 * ZeroBound.H(T) ** 2 * ct - ZeroBound.H(T) * xt)
