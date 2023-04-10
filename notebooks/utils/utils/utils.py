@@ -139,7 +139,7 @@ class FinanceUtils():
         Returns:
             _type_: _description_
         """
-        return tf.math.multiply((1.0 + xn*0.), 1/ ZeroBound.N_tensor(tn, xn, ct))
+        return tf.math.multiply((1.0 + xn* 0.), 1/ ZeroBound.N_tensor(tn, xn, ct))
     
     def zero_bond_coupon_np(xn, tn, ct):
         """_summary_
