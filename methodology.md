@@ -86,7 +86,6 @@ LGM in our context:
 
 $$
 dx_t = \sigma_tsW_t^N
-
 $$
 
 In financial context is pretty common to define a "market" normalization value typically known as **numeraire:**
