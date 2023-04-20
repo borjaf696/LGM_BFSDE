@@ -4,56 +4,36 @@ import numpy as np
 class MathUtils():
     
     @staticmethod
-    def custom_derivative_model(x, model, multioutput = True):
-        h = 1e-3
-        # Dimensions
-        x_dim, y_dim, z_dim = x.shape
-        # Gradient vector
-        gradient = np.zeros((x_dim, y_dim, z_dim))
-        for i in range(z_dim):
-            # Vector for partial derivative estimation
-            offset_tensor = np.zeros((x_dim, y_dim, 1))
-            offset_tensor[:, i] = h
-            offset_tensor = tf.convert_to_tensor(
-                offset_tensor,
-                dtype = tf.float64
-            )
-            # Constantes:
-            denominator = h
-            numerator = tf.math.subtract(
-                model(
-                    tf.math.add(x, offset_tensor)
-                ), model(
-                    tf.math.subtract(x, offset_tensor)
-                )
-            )
-            denominator = 2 * h
-            gradient[:, :, i] = tf.reshape(
-                numerator / denominator,
-                (x_dim, y_dim)
-            )
-        gradient = tf.convert_to_tensor(
-            gradient,
-            dtype = tf.float64
-        )
-        return gradient
-    
-    @staticmethod
-    def custom_diagonal_derivative(x, model):
+    def custom_derivative_model(x, model, multioutput = True, mode = 'centered'):
         h = 1e-1
         # Size x
-        x_dim, y_dim, z_dim = x.shape
+        x_dim, y_dim = x.shape
         # Gradient vector
-        gradient = np.zeros((x_dim, y_dim, z_dim))
-        for i in range(z_dim):
-            for j in range(y_dim):
-                # Vector for partial derivative estimation
-                offset_tensor = np.zeros((x_dim, y_dim, z_dim))
-                offset_tensor[:, j, i] = h
-                offset_tensor = tf.convert_to_tensor(offset_tensor,
-                                                    dtype = tf.float64)
-                # Constantes:
-                denominator = h
+        if multioutput:
+            gradient = np.zeros((x_dim, y_dim, y_dim))
+        else:
+            gradient = np.zeros((x_dim, y_dim, 1))
+        for i in range(y_dim):
+            # Vector for partial derivative estimation
+            offset_tensor = np.zeros((x_dim, y_dim), dtype = np.float64)
+            offset_tensor[:, i] = h
+            offset_tensor = tf.convert_to_tensor(offset_tensor,
+                                                dtype = np.float64)
+            # Constantes:
+            denominator = h
+            if mode == 'progressive':
+                numerator = model(
+                    tf.math.add(x, offset_tensor)
+                ) - model(
+                    x
+                ) 
+            elif mode == 'regressive':
+                numerator = model(
+                    x
+                ) - model(
+                    tf.math.subtract(x, offset_tensor)
+                )
+            elif mode == 'centered':
                 numerator = tf.math.subtract(
                     model(
                         tf.math.add(x, offset_tensor)
@@ -61,10 +41,10 @@ class MathUtils():
                         tf.math.subtract(x, offset_tensor)
                     )
                 )
-                denominator = 2 * h
-                gradient[:, j, i] = numerator[:, j, 0] / denominator
+            denominator = 2 * h
+            gradient [:, i, :] = numerator / denominator
         gradient = tf.convert_to_tensor(gradient,
-                                            dtype = tf.float64)
+                                            dtype = np.float64)
         return gradient
 class MLUtils():
     import pandas as pd
@@ -116,6 +96,7 @@ class MLUtils():
         pipe = Pipeline(steps = pipeline_steps)
         return pipe
             
+
 class FinanceUtils():
     @staticmethod
     def sigma(t, sigma_0 = 0.0075):
@@ -145,7 +126,33 @@ class FinanceUtils():
         return integrate.quad(lambda x: FinanceUtils.sigma(t = x, 
                                               sigma_0 = sigma_value)**2, 0, t)[0]    
     
+    @staticmethod
+    @tf.function
+    def zero_bond_coupon(xn, tn, ct):
+        """_summary_
+
+        Args:
+            xn (_type_): _description_
+            n (_type_): _description_
+            ct (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        return tf.math.multiply((1.0 + xn* 0.), 1/ ZeroBound.N_tensor(tn, xn, ct))
     
+    def zero_bond_coupon_np(xn, tn, ct):
+        """_summary_
+
+        Args:
+            xn (_type_): _description_
+            n (_type_): _description_
+            ct (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
+        return (1.0 + xn * 0.) / ZeroBound.N(tn, xn, ct)
     
 class ZeroBound():  
     @staticmethod

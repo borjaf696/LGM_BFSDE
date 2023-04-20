@@ -1,0 +1,30 @@
+{
+    "toy_example":{
+        "num_layers": 1,
+        "hidden_units": 16,
+        "activations":[
+            "relu"
+        ]
+    },
+    "mid_size":{
+        "num_layers": 3,
+        "hidden_units": 256,
+        "activations":[
+            "relu",
+            "relu",
+            "relu"
+        ]
+    },
+    "large_example":{
+        "num_layers": 6,
+        "hidden_units": 256,
+        "activations":[
+            "relu",
+            "relu",
+            "relu",
+            "relu",
+            "relu",
+            "relu"
+        ]
+    }
+}
