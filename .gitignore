@@ -169,3 +169,5 @@ cython_debug/
 # Avoid histories
 .RData
 .Rhistory
+notebooks/logs/20230217/grads_model.log
+notebooks/logs/20230217/grads_fx.log
