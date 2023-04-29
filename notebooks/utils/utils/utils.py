@@ -197,7 +197,6 @@ class ZeroBound():
             _type_: _description_
         """
         assert ct is not None
-        T = np.float64(T)
         return ZeroBound.D_tensor(T) * tf.math.exp(-0.5 * ZeroBound.H_tensor(T)**2 * ct - ZeroBound.H_tensor(T)*xt) * ZeroBound.N_tensor(t, xt, ct)
     @staticmethod
     def D(t, r = 0.03):
@@ -277,29 +276,59 @@ class ZeroBound():
         """
         return tf.math.multiply(ZeroBound.Z_tensor(xn, tn, T, ct), 1/ ZeroBound.N_tensor(tn, xn, ct))
 
+# Constants
+TAUS = {
+    3: 0.25,
+    6: 0.5,
+    12: 1.0
+}
+TIMES = {
+    3: 0.25,
+    6: 0.5,
+    12:1.0
+}
+
 class IRS():
-    TAUS = {
-        3: 0.25,
-        6: 0.5,
-        12: 1.0
-        }
-    times = {
-        3: 0.25,
-        6: 0.5,
-        12:1.0
-    }
     @staticmethod
     @tf.function
-    def IRS(xn, TN, T, ct, period = 6):
-        tau = taus[period]
-        multiFactor = times[period]
+    def IRS(xn, 
+            T,
+            TN, 
+            ct, 
+            period = 6,
+            K = 0.03):
+        tau = TAUS[period]
+        time_add = TIMES[period]
         # Internal parameter
-        num_times = (TN - T) / multiFactor
-        K = 0.03
-        variable = (1 - ZeroBound.Z_tensor(xn, TN, T, ct))
+        num_times = np.float64((TN - T) / time_add)
+        variable = (1 - ZeroBound.Z_tensor(xn, T, TN, ct))
         fixed = 0.
-        for i in range(1, num_times + 1):
-            
-        
+        for i in range(1.0, num_times + 1):
+            fixed += ZeroBound.Z(xn, T, T + i * time_add, ct)
+        fixed *= tau * K
         return variable + fixed
         
+    @staticmethod
+    @tf.function
+    def IRS_normalized(xn, 
+            T,
+            TN, 
+            ct, 
+            period = 6,
+            K = 0.03):
+        tau = TAUS[period]
+        time_add = TIMES[period]
+        # Internal parameter
+        first_val = np.float64(1.0)
+        num_times = (TN - T) / time_add
+        variable = (1 - ZeroBound.Z_tensor(xn, T, TN, ct))
+        fixed = tf.zeros(
+            tf.shape(xn),
+            dtype = tf.float64
+        )
+        for i in range(first_val, num_times + 1):
+            fixed += ZeroBound.Z_tensor(xn, T, T + i * time_add, ct)
+        fixed *= tau * K
+        # Normalize factor
+        N = ZeroBound.N_tensor(T, xn, ct)
+        return variable + fixed / N
