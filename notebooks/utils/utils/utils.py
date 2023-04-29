@@ -143,9 +143,7 @@ class FinanceUtils():
         """
         import scipy.integrate as integrate
         return integrate.quad(lambda x: FinanceUtils.sigma(t = x, 
-                                              sigma_0 = sigma_value)**2, 0, t)[0]    
-    
-    
+                                              sigma_0 = sigma_value)**2, 0, t)[0]      
     
 class ZeroBound():  
     @staticmethod
@@ -265,3 +263,43 @@ class ZeroBound():
         """
         assert ct is not None
         return np.exp(-0.5 * ZeroBound.H(T) ** 2 * ct - ZeroBound.H(T) * xt)
+    
+    @staticmethod
+    @tf.function
+    def Z_normalized(xn, tn, T, ct):
+        """_summary_
+        Args:
+            xn (_type_): _description_
+            n (_type_): _description_
+            ct (_type_): _description_
+        Returns:
+            _type_: _description_
+        """
+        return tf.math.multiply(ZeroBound.Z_tensor(xn, tn, T, ct), 1/ ZeroBound.N_tensor(tn, xn, ct))
+
+class IRS():
+    TAUS = {
+        3: 0.25,
+        6: 0.5,
+        12: 1.0
+        }
+    times = {
+        3: 0.25,
+        6: 0.5,
+        12:1.0
+    }
+    @staticmethod
+    @tf.function
+    def IRS(xn, TN, T, ct, period = 6):
+        tau = taus[period]
+        multiFactor = times[period]
+        # Internal parameter
+        num_times = (TN - T) / multiFactor
+        K = 0.03
+        variable = (1 - ZeroBound.Z_tensor(xn, TN, T, ct))
+        fixed = 0.
+        for i in range(1, num_times + 1):
+            
+        
+        return variable + fixed
+        

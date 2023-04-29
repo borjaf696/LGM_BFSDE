@@ -6,7 +6,8 @@ from tensorflow.keras import layers
 from tensorflow import keras
 # Utils
 from utils.utils.utils import FinanceUtils
-
+# Load configuration
+import json
 # TODO: Write better method definitions
 class LGM_model_one_step(tf.keras.Model):
 
@@ -14,35 +15,47 @@ class LGM_model_one_step(tf.keras.Model):
         self,
         n_steps,
         T = 0,
-        name="LGM_NN_model_single_step",
-        verbose = False,
+        name="zerobond",
         *,
+        verbose = False,
         sigma = None,
         batch_size = None,
+        phi = None,
         **kwargs
     ):
         """_summary_
 
         Args:
             n_steps (_type_): _description_
-            intermediate_dim (int, optional): _description_. Defaults to 64.
-            is_sequential (bool, optional): _description_. Defaults to False.
-            name (str, optional): _description_. Defaults to "LGM_NN_model".
+            T (int, optional): _description_. Defaults to 0.
+            name (str, optional): _description_. Defaults to "LGM_NN_model_single_step".
+            verbose (bool, optional): _description_. Defaults to False.
+            sigma (_type_, optional): _description_. Defaults to None.
+            batch_size (_type_, optional): _description_. Defaults to None.
+            phi (_type_, optional): _description_. Defaults to None.
         """
         super(LGM_model_one_step, self).__init__(name=name, **kwargs)
         # Training relevant attributes
         self.N = n_steps
+        self.T = T
         self._batch_size = batch_size
         self._expected_sample_size = self.N * self._batch_size
+        # Phi function
+        self.__phi = phi
         # Model with time and value
         input_tmp = keras.Input(shape = (2, ), 
                                 name = 'input_nn')
         initializer = tf.keras.initializers.GlorotUniform(seed = 6543210)
-        # TODO: Define config file with network architecture
-        self.__num_layers = 6
+        # Configuration read from:
+        # --- name
+        # --- T, strike time
+        configuration = None
+        with open('configs/ff_config.json', 'r+') as f:
+            configuration = json.load(f)[name][str(T)]
+        self.__num_layers = configuration['layers']
         for i in range(self.__num_layers):
             objective_layer = x if i >0 else input_tmp
-            x = layers.Dense(units = 256,
+            x = layers.Dense(units = configuration['units'],
                     activation = 'relu',
                     kernel_initializer = initializer)(objective_layer)
         output_tmp = layers.Dense(units = 1, 
@@ -53,11 +66,11 @@ class LGM_model_one_step(tf.keras.Model):
             outputs = output_tmp,
             name = name)
         # Metrics tracker
-        self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+        self.loss_tracker = tf.keras.metrics.Mean(name="total_loss")
         # Internal management
-        self._loss_tracker_t1 = tf.keras.metrics.Mean(name="loss")
-        self._loss_tracker_t2 = tf.keras.metrics.Mean(name="loss")
-        self._loss_tracker_t3 = tf.keras.metrics.Mean(name="loss")
+        self._loss_tracker_t1 = tf.keras.metrics.Mean(name="strike_loss")
+        self._loss_tracker_t2 = tf.keras.metrics.Mean(name="derivative_loss")
+        self._loss_tracker_t3 = tf.keras.metrics.Mean(name="step_loss")
         # Internal loss results
         self._loss_tracker_t1_array = []
         self._loss_tracker_t2_array = []
@@ -320,9 +333,10 @@ class LGM_model_one_step(tf.keras.Model):
         tn = np.float64(self._deltaT * len_path)
         strike_loss = tf.reshape(
             tf.math.squared_difference(predictions[:, -1], 
-                                       FinanceUtils.zero_bond_coupon(
+                                       self.__phi(
                                            xn_tensor, 
-                                           tn, 
+                                           tn,
+                                           self.T,
                                            self._ct)
                                         ), 
             (batch_size,1)
@@ -336,13 +350,13 @@ class LGM_model_one_step(tf.keras.Model):
         '''print(f'Xn: {xn_tensor}')
         print(f'Ct: {self._ct}')
         print(f'Tn: {tn}')
-        print(f'Zero bound coupon: {FinanceUtils.zero_bond_coupon(xn_tensor, tn, self._ct)}')'''
+        print(f'Zero bound coupon: {self.__phi(xn_tensor, tn, self._ct)}')'''
         # Autodiff f
         xn = tf.Variable(xn_tensor, name = 'xn', trainable = True)
         tn = tf.Variable(np.float64(self._deltaT * len_path), name = 'tn', trainable=False)
         ct = tf.Variable(np.float64(self._ct), name = 'ct', trainable=False)
         with tf.GradientTape() as tape:
-            y = FinanceUtils.zero_bond_coupon(xn, tn, ct)
+            y = self.__phi(xn, tn, self.T, ct)
         grad_df = tape.gradient(y, {
             'xn':xn   
         })
@@ -379,9 +393,9 @@ class LGM_model_one_step(tf.keras.Model):
         # Flatten the cumsum
         error_per_step = tf.reshape(error_per_step, [-1])
         # Record internal losses
-        self._loss_tracker_t1.update_state(betas[0] * strike_loss)
-        self._loss_tracker_t2.update_state(betas[1] * derivative_loss)
-        self._loss_tracker_t3.update_state( betas[2] * error_per_step)
+        self._loss_tracker_t1.update_state(strike_loss)
+        self._loss_tracker_t2.update_state(derivative_loss)
+        self._loss_tracker_t3.update_state(error_per_step)
         # Weigth the errors
         strike_loss *= betas[0]
         derivative_loss *= betas[1]
