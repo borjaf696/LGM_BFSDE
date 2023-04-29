@@ -1,0 +1,38 @@
+{
+    "zerobond":{
+        "1":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "2":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "4":{
+            "layers": 12,
+            "hidden_units": 32
+        },
+        "8":{
+            "layers": 12,
+            "hidden_units": 32
+        }
+    },
+    "irs":{
+        "1":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "2":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "4":{
+            "layers": 12,
+            "hidden_units": 32
+        },
+        "8":{
+            "layers": 12,
+            "hidden_units": 32
+        }
+    }
+}
