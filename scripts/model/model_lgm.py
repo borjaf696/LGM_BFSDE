@@ -5,7 +5,10 @@ import numpy as np
 from tensorflow.keras import layers
 from tensorflow import keras
 # Utils
-from utils.utils.utils import FinanceUtils
+from utils.utils.utils import (
+    FinanceUtils, 
+    MathUtils
+)
 
 # TODO: Write better method definitions
 class LGM_model(tf.keras.Model):
@@ -200,7 +203,7 @@ class LGM_model(tf.keras.Model):
                 'derivative_strike_loss': self._loss_tracker_t2_array, 
                 'steps_error_loss': self._loss_tracker_t3_array}
 
-    def _get_dv_dx(self, features):
+    def _get_dv_dx(self, X):
         """_summary_
 
         Args:
@@ -209,16 +212,16 @@ class LGM_model(tf.keras.Model):
         Returns:
             _type_: _description_
         """
-        x_dim, y_dim, z_dim = tf.shape(features)
-        x_variable = tf.Variable(features,
-                         name = 'x')
-        with tf.GradientTape() as tape:
-            tape.watch(x_variable)
-            y = self._custom_model(x_variable)
-        # This represents dV/dX
-        self._grads = tape.gradient(y, {
-            'x':x_variable
-        })['x'][:, :, 0]
+        (x_dim, y_dim, z_dim) = X.shape
+        self._grads = MathUtils.custom_diagonal_derivative(X, 
+                                          self._custom_model)[:, :, 0]
+        self._grads = tf.reshape(
+            X,
+            (
+                x_dim,
+                y_dim
+            )
+        )
         # Verbose to output
         if self._verbose:
             log_file = 'logs/20230217/grads_model.log'
