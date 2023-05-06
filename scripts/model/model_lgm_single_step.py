@@ -57,7 +57,7 @@ class LGM_model_one_step(tf.keras.Model):
         # --- name
         # --- T, strike time
         configuration = None
-        with open('configs/ff_config.json', 'r+') as f:
+        with open('scripts/configs/ff_config.json', 'r+') as f:
             configuration = json.load(f)[name][str(T)]
         self.__num_layers = configuration['layers']
         for i in range(self.__num_layers):
@@ -332,6 +332,10 @@ class LGM_model_one_step(tf.keras.Model):
         batch_size = X.shape[0] // self.N
         # Predict
         predictions = self._custom_model(X)
+        predictions = tf.cast(
+            predictions, 
+            dtype=tf.float64
+        )
         predictions_rolled = tf.roll(
             predictions,
             shift = 1,
@@ -389,3 +393,11 @@ class LGM_model_one_step(tf.keras.Model):
         print(f'Grads: {grads[1]}\n')
         sys.exit()'''
         return v, predictions
+    
+    # Save model 
+    def save_weights(self, path):
+        self._custom_model.save_weights(path)
+        
+    # Save model 
+    def load_weights(self, path):
+        self._custom_model.load_weights(path)

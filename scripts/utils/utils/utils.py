@@ -375,4 +375,20 @@ class Swaption():
         fixed *= tau * K
         # Normalize factor
         N = ZeroBond.N_tensor(T, xn, ct)
-        return max(variable + fixed, 0) / N
+        # Fix shape for swaption
+        tensor_irs = tf.reshape(
+            (variable + fixed),
+            (variable.shape[0], 1)
+        )
+        zero_mask = tf.zeros(
+            (tensor_irs.shape[0], 1), 
+            dtype = tensor_irs.dtype
+        )
+        tensor_irs = tf.concat(
+            [
+                tensor_irs,
+                zero_mask
+            ],
+            axis = 1
+        )
+        return tf.reduce_max(tensor_irs, axis = 1) / N

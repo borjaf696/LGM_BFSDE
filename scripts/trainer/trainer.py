@@ -18,21 +18,14 @@ def trainer(
         phi_str: str,
         df_x: pd.DataFrame,
 ):
-    model_name = 'models_store/' + phi_str + '_model_lgm_single_step.h5'
+    model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(nsims)+ '.h5'
     # Fixed for now
     epochs = 50
     # Batch execution with baby steps
     size_of_the_batch = 100
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
-    try:
-        with open(model_name, 'rb') as f:
-           lgm_single_step = pkl.load(f)
-        return lgm_single_step
-    except FileNotFoundError: 
-        print(f'{model_name} not found')
-    print(f'Training {epochs} epochs with {size_of_the_batch} paths per epoch with length {N_steps}')
-    # Custom model
+    # LGM model instance
     lgm_single_step = LGM_model_one_step(n_steps = N_steps, 
                                      T = T, 
                                      future_T = 2 * T,
@@ -42,6 +35,12 @@ def trainer(
                                      phi = phi,
                                      name = 'irs'
     )
+    try:
+        lgm_single_step.load_weights(model_name)
+        return lgm_single_step
+    except FileNotFoundError: 
+        print(f'{model_name} not found')
+    print(f'Training {epochs} epochs with {size_of_the_batch} paths per epoch with length {N_steps}')
     print(f'{lgm_single_step.summary()}')
     # Compile the model
     lgm_single_step.define_compiler(
@@ -66,9 +65,7 @@ def trainer(
                 start_time = start_time,
                 delta_x = delta_x_batch
             )
-    # Pickling the model
-    with open(model_name, 'wb') as f:
-        pkl.dump(lgm_single_step, f)
-        print(f'Model saved in {model_name}')
+    # Save the model
+    lgm_single_step.save_weights(model_name)
         
     return lgm_single_step
