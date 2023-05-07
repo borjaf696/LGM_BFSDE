@@ -1,3 +1,5 @@
+# Load configuration
+import json
 # Imports
 import tensorflow as tf
 import numpy as np
@@ -6,7 +8,8 @@ from tensorflow.keras import layers
 from tensorflow import keras
 # Utils
 from utils.utils.utils import FinanceUtils
-
+# Losses
+from losses.losses import Losses
 # TODO: Write better method definitions
 class LGM_model_one_step(tf.keras.Model):
 
@@ -14,50 +17,69 @@ class LGM_model_one_step(tf.keras.Model):
         self,
         n_steps,
         T = 0,
-        name="LGM_NN_model_single_step",
-        verbose = False,
+        name="zerobond",
         *,
+        verbose = False,
         sigma = None,
         batch_size = None,
+        phi = None,
+        future_T = None,
         **kwargs
     ):
         """_summary_
 
         Args:
             n_steps (_type_): _description_
-            intermediate_dim (int, optional): _description_. Defaults to 64.
-            is_sequential (bool, optional): _description_. Defaults to False.
-            name (str, optional): _description_. Defaults to "LGM_NN_model".
+            T (int, optional): _description_. Defaults to 0.
+            name (str, optional): _description_. Defaults to "LGM_NN_model_single_step".
+            verbose (bool, optional): _description_. Defaults to False.
+            sigma (_type_, optional): _description_. Defaults to None.
+            batch_size (_type_, optional): _description_. Defaults to None.
+            phi (_type_, optional): _description_. Defaults to None.
         """
         super(LGM_model_one_step, self).__init__(name=name, **kwargs)
         # Training relevant attributes
         self.N = n_steps
+        self.T = np.float64(T)
+        # Same for actives with out future
+        self.future_T = future_T
         self._batch_size = batch_size
         self._expected_sample_size = self.N * self._batch_size
+        # Phi function
+        self.__phi = phi
+        # Type of active
+        self.__name = name
         # Model with time and value
         input_tmp = keras.Input(shape = (2, ), 
                                 name = 'input_nn')
         initializer = tf.keras.initializers.GlorotUniform(seed = 6543210)
-        # TODO: Define config file with network architecture
-        self.__num_layers = 6
+        # Configuration read from:
+        # --- name
+        # --- T, strike time
+        configuration = None
+        with open('scripts/configs/ff_config.json', 'r+') as f:
+            configuration = json.load(f)[name][str(T)]
+        self.__num_layers = configuration['layers']
         for i in range(self.__num_layers):
             objective_layer = x if i >0 else input_tmp
-            x = layers.Dense(units = 256,
+            x = layers.Dense(units = configuration['hidden_units'],
                     activation = 'relu',
-                    kernel_initializer = initializer)(objective_layer)
+                    kernel_initializer = initializer,
+                    name = 'internal_relu_dense_'+str(i))(objective_layer)
         output_tmp = layers.Dense(units = 1, 
                                     activation = 'relu', 
-                                    kernel_initializer = initializer)(x)
+                                    kernel_initializer = initializer,
+                                    name = 'output_relu_dense')(x)
         self._custom_model = keras.Model(
             inputs = input_tmp,
             outputs = output_tmp,
             name = name)
         # Metrics tracker
-        self.loss_tracker = tf.keras.metrics.Mean(name="loss")
+        self.loss_tracker = tf.keras.metrics.Mean(name="total_loss")
         # Internal management
-        self._loss_tracker_t1 = tf.keras.metrics.Mean(name="loss")
-        self._loss_tracker_t2 = tf.keras.metrics.Mean(name="loss")
-        self._loss_tracker_t3 = tf.keras.metrics.Mean(name="loss")
+        self._loss_tracker_t1 = tf.keras.metrics.Mean(name="strike_loss")
+        self._loss_tracker_t2 = tf.keras.metrics.Mean(name="derivative_loss")
+        self._loss_tracker_t3 = tf.keras.metrics.Mean(name="step_loss")
         # Internal loss results
         self._loss_tracker_t1_array = []
         self._loss_tracker_t2_array = []
@@ -149,7 +171,7 @@ class LGM_model_one_step(tf.keras.Model):
         x, y = data
         x = tf.Variable(x, trainable = True)
         with tf.GradientTape() as tape:
-            tape.watch(x_variable)
+            tape.watch(x)
             v = self.predict(x)
             predictions = tf.Variable(self._predictions, trainable = False)   
             loss = self._loss_lgm(x = x, v = v, predictions = predictions, N_steps = N_steps)
@@ -192,14 +214,24 @@ class LGM_model_one_step(tf.keras.Model):
             v, predictions = self.predict(x, delta_x = delta_x)
             v = tf.reshape(v, (batch_size, self.N))
             predictions = tf.reshape(predictions, (batch_size, self.N))
-            loss = self.loss_lgm(x = x, 
-                                 v = v, 
+            loss, losses_tracker = Losses.loss_lgm(x = x, 
+                                 v = v,
+                                 ct = self._ct,
+                                 derivatives = self._get_dv_dxi(self.N - 1),  
                                  predictions = predictions, 
                                  N_steps = self.N,
-                                 verbose = self._verbose)
+                                 verbose = self._verbose,
+                                 T = self.T,
+                                 TN = self.future_T,
+                                 phi = self.__phi,
+                                 mask_loss = self._mask_loss)
         grads = tape.gradient(loss, self.model.trainable_weights)
         # print(f'Grads: {len(grads)}')
         self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
+        # Losses tracker
+        self._loss_tracker_t1.update_state(losses_tracker['t1'])
+        self._loss_tracker_t2.update_state(losses_tracker['t2'])
+        self._loss_tracker_t3.update_state(losses_tracker['t3'])
         # Compute metrics
         self.loss_tracker.update_state(loss)
         if epoch % 10 == 0:
@@ -284,120 +316,6 @@ class LGM_model_one_step(tf.keras.Model):
             _type_: _description_
         """
         return self._grads[:, i] if self._grads is not None else None
-    
-    # TODO: Separate from the model
-    # Care with object attributes
-    def loss_lgm(self, 
-                 x: tf.Tensor, 
-                 v: tf.Tensor, 
-                 predictions: tf.Tensor, 
-                 N_steps: np.int64, 
-                 verbose: bool = False):
-        """_summary_
-
-        Args:
-            x (tf.Tensor): _description_
-            v (tf.Tensor): _description_
-            predictions (tf.Tensor): _description_
-            N_steps (np.int64): _description_
-
-        Returns:
-            _type_: _description_
-        """
-        # print(f'Predictions:{predictions[0,:]}, V: {v[0, :]}')
-        betas = [0.02, 0.02, 1.00 * 10000]
-        # Careful: Using global variable...
-        len_path = N_steps
-        # Tiles
-        tile_multiples = tf.constant([1, N_steps], tf.int64)
-        samples, _ = x.shape
-        batch_size = int(np.floor(samples / N_steps))
-        # For f and f'
-        x_reformat = tf.reshape(x[:, 0], (batch_size, N_steps))
-        xn_tensor = x_reformat[:, -1]
-        n_idx = int(len_path)
-        # Loss given the strike function
-        tn = np.float64(self._deltaT * len_path)
-        strike_loss = tf.reshape(
-            tf.math.squared_difference(predictions[:, -1], 
-                                       FinanceUtils.zero_bond_coupon(
-                                           xn_tensor, 
-                                           tn, 
-                                           self._ct)
-                                        ), 
-            (batch_size,1)
-        )
-        # Repeat the tensor to adapt dimensions
-        strike_loss = tf.tile(
-            strike_loss,
-            tile_multiples
-        )
-        strike_loss_reshaped = tf.reshape(strike_loss, [-1])
-        '''print(f'Xn: {xn_tensor}')
-        print(f'Ct: {self._ct}')
-        print(f'Tn: {tn}')
-        print(f'Zero bound coupon: {FinanceUtils.zero_bond_coupon(xn_tensor, tn, self._ct)}')'''
-        # Autodiff f
-        xn = tf.Variable(xn_tensor, name = 'xn', trainable = True)
-        tn = tf.Variable(np.float64(self._deltaT * len_path), name = 'tn', trainable=False)
-        ct = tf.Variable(np.float64(self._ct), name = 'ct', trainable=False)
-        with tf.GradientTape() as tape:
-            y = FinanceUtils.zero_bond_coupon(xn, tn, ct)
-        grad_df = tape.gradient(y, {
-            'xn':xn   
-        })
-        df_dxn = grad_df['xn'] if grad_df['xn'] is not None else 0. * xn
-        # Verbose to output
-        if verbose:
-            log_file = 'logs/20230217/grads_fx.log'
-            with open(log_file, 'a+') as f:
-                vector = x[:, -1]
-                f.write(f'X:\n')
-                for x_i in vector:
-                    f.write(f'{x_i},')
-                f.write(f'\n')
-                f.write(f'Grads: \n')
-                for grad_i in vector:
-                    f.write(f'{grad_i},')
-                f.write(f'\n')
-        # Careful: global variable
-        derivative_loss = tf.reshape(
-            tf.math.squared_difference(
-                self._get_dv_dxi(n_idx - 1), 
-                df_dxn
-            ), 
-            (batch_size, 1))
-        # Repeat the tensor to adapt dimensions
-        derivative_loss = tf.tile(
-            derivative_loss,
-            [1, N_steps]
-        )
-        derivative_loss_reshaped = tf.reshape(derivative_loss, [-1])
-        # Epoch error per step
-        error_per_step = tf.cumsum(
-            tf.math.squared_difference(v, predictions), axis = 1) / self.N
-        # Flatten the cumsum
-        error_per_step = tf.reshape(error_per_step, [-1])
-        # Record internal losses
-        self._loss_tracker_t1.update_state(betas[0] * strike_loss)
-        self._loss_tracker_t2.update_state(betas[1] * derivative_loss)
-        self._loss_tracker_t3.update_state( betas[2] * error_per_step)
-        # Weigth the errors
-        strike_loss *= betas[0]
-        derivative_loss *= betas[1]
-        error_per_step *= betas[2]
-        
-        '''print(f'Loss shape: {tf.math.add(error_per_step, tf.math.add(strike_loss_reshaped, derivative_loss_reshaped)).shape}')
-        print(f'X shape: {x.shape}')
-        sys.exit()'''
-        
-        loss_per_sample = tf.math.add(error_per_step, tf.math.add(strike_loss_reshaped, derivative_loss_reshaped))
-        
-        # Apply mask to only change given the last step
-        return tf.math.multiply(
-            loss_per_sample,
-            self._mask_loss
-        )
 
     def predict(self, X:tf.Tensor, 
                 delta_x:tf.Tensor,
@@ -414,6 +332,10 @@ class LGM_model_one_step(tf.keras.Model):
         batch_size = X.shape[0] // self.N
         # Predict
         predictions = self._custom_model(X)
+        predictions = tf.cast(
+            predictions, 
+            dtype=tf.float64
+        )
         predictions_rolled = tf.roll(
             predictions,
             shift = 1,
@@ -471,3 +393,11 @@ class LGM_model_one_step(tf.keras.Model):
         print(f'Grads: {grads[1]}\n')
         sys.exit()'''
         return v, predictions
+    
+    # Save model 
+    def save_weights(self, path):
+        self._custom_model.save_weights(path)
+        
+    # Save model 
+    def load_weights(self, path):
+        self._custom_model.load_weights(path)

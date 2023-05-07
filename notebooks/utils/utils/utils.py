@@ -332,3 +332,47 @@ class IRS():
         # Normalize factor
         N = ZeroBound.N_tensor(T, xn, ct)
         return variable + fixed / N
+class Swaption():
+    @staticmethod
+    @tf.function
+    def Swaption(xn, 
+            T,
+            TN, 
+            ct, 
+            period = 6,
+            K = 0.03):
+        tau = TAUS[period]
+        time_add = TIMES[period]
+        # Internal parameter
+        num_times = np.float64((TN - T) / time_add)
+        variable = (1 - ZeroBound.Z_tensor(xn, T, TN, ct))
+        fixed = 0.
+        for i in range(1.0, num_times + 1):
+            fixed += ZeroBound.Z(xn, T, T + i * time_add, ct)
+        fixed *= tau * K
+        return max(variable + fixed, 0)
+        
+    @staticmethod
+    @tf.function
+    def Swaption_normalized(xn, 
+            T,
+            TN, 
+            ct, 
+            period = 6,
+            K = 0.03):
+        tau = TAUS[period]
+        time_add = TIMES[period]
+        # Internal parameter
+        first_val = np.float64(1.0)
+        num_times = (TN - T) / time_add
+        variable = (1 - ZeroBound.Z_tensor(xn, T, TN, ct))
+        fixed = tf.zeros(
+            tf.shape(xn),
+            dtype = tf.float64
+        )
+        for i in range(first_val, num_times + 1):
+            fixed += ZeroBound.Z_tensor(xn, T, T + i * time_add, ct)
+        fixed *= tau * K
+        # Normalize factor
+        N = ZeroBound.N_tensor(T, xn, ct)
+        return max(variable + fixed, 0) / N
