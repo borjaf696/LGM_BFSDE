@@ -1,5 +1,5 @@
 from typing import Any
-from model.model_lgm_single_step import LGM_model_one_step
+from scripts.model.model_lgm_single_step import LGM_model_one_step
 
 import numpy as np
 import pickle as pkl
@@ -33,7 +33,7 @@ def trainer(
                                      sigma = sigma,
                                      batch_size = size_of_the_batch,
                                      phi = phi,
-                                     name = 'irs'
+                                     name = phi_str
     )
     try:
         lgm_single_step.load_weights(model_name)

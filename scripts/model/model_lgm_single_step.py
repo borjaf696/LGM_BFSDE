@@ -60,6 +60,8 @@ class LGM_model_one_step(tf.keras.Model):
         with open('scripts/configs/ff_config.json', 'r+') as f:
             configuration = json.load(f)[name][str(T)]
         self.__num_layers = configuration['layers']
+        print(f'Number of layers: {self.__num_layers}')
+        print(f'Number of hidden units: {configuration["hidden_units"]}')
         for i in range(self.__num_layers):
             objective_layer = x if i >0 else input_tmp
             x = layers.Dense(units = configuration['hidden_units'],

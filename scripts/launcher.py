@@ -9,7 +9,8 @@ from utils.simulator.simulator import MCSimulation
 from utils.utils.utils import (
     ZeroBond,
     IRS,
-    Swaption
+    Swaption,
+    FinanceUtils
 )
 
 from trainer.trainer import trainer
@@ -18,7 +19,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Descripción del programa")
     
     parser.add_argument("-p", "--phi", type=str, help="Phi function to be used irs/swaption/zerobond (default zerobond)", default = 'zerobond')
-    parser.add_argument("-n", "--nsims", type=str, help="Number of simulations (default 1000)", default=100)
+    parser.add_argument("-n", "--nsims", type=str, help="Number of simulations (default 1000)", default=1000)
     parser.add_argument("-t", "--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
     parser.add_argument("-s", "--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("-q", "--nsteps", type=float, help="Number of steps for each path (default 100)", default=100)
@@ -38,7 +39,7 @@ def get_phi(active):
     return phi
 
 # TODO: Move to a tester
-def test(df, model, test_name_file = None):
+def test(df, model, test_name_file = None, sigma_value = None):
     assert test_name_file is not None, 'Test name file is not provided'
     
     mc_paths_tranformed = df[['xt', 'dt']].values
@@ -56,6 +57,16 @@ def test(df, model, test_name_file = None):
     )
     v_lgm_single_step = results.explode('results').values
     df['lgm_single_step_V'] = v_lgm_single_step.astype(np.float64)
+    # Calculate C and N
+    t_unique = df.dt.unique()
+    dict_C = {dt:FinanceUtils.C(dt, sigma_value = sigma) for dt in t_unique}
+    df['ct'] = df.apply(lambda x: dict_C[x['dt']], axis = 1)
+    df['N'] = ZeroBond.N(
+        df.dt.values.astype(np.float64),
+        df.xt.values.astype(np.float64),
+        df.ct.values.astype(np.float64)
+    )
+    df['V_est'] = df.lgm_single_step_V / df.N
     # Export to file
     df.to_csv(
         test_name_file, 
@@ -102,7 +113,7 @@ if __name__ == '__main__':
     print(f"Function selected: {args.phi}")
     # Get the environment
     phi = get_phi(phi_str)
-    print(f"Training: {phi}")
+    print(f"Training: {phi_str}")
     # Train the model
     model = trainer(
         T = T,
@@ -131,5 +142,7 @@ if __name__ == '__main__':
         test(
             df = df_x_test,
             model = model,
-            test_name_file = test_name_file
+            test_name_file = test_name_file,
+            # TODO: Deprecate this
+            sigma_value = sigma
         )
