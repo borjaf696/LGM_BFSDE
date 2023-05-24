@@ -23,7 +23,7 @@ def parse_args():
     parser.add_argument("--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("--nsteps", type=float, help="Number of steps for each path (default 100)", default=100)
-    parser.add_argument("--exists-analytical", nargs="?", type=bool, help="Whether to use analytical model (default False)", default=False)
+    parser.add_argument("--analytical", nargs="?", type=bool, help="Whether to use analytical model (default False)", default=False)
     parser.add_argument("--test", type=bool, help="Test", default = True)
     args = parser.parse_args()
     
@@ -39,6 +39,16 @@ def get_phi(active):
         phi = Swaption.Swaption_normalized
     return phi
 
+def get_phi_test(active):
+    phi = None
+    if active == 'zerobond':
+        phi = ZeroBond.Z
+    elif active == 'irs':
+        phi = IRS.IRS_test
+    elif active =='swaption':
+        phi = Swaption.Swaption_test
+    return phi
+
 # TODO: Move to a tester
 def test(df, model, test_name_file = None, sigma_value = None):
     assert test_name_file is not None, 'Test name file is not provided'
@@ -46,7 +56,7 @@ def test(df, model, test_name_file = None, sigma_value = None):
     mc_paths_tranformed = df[['xt', 'dt']].values
     x = mc_paths_tranformed.astype(np.float64)
     delta_x = df._delta_x.values.astype(np.float64)
-    v_lgm_single_step, predictions = model.predict(
+    v_lgm_single_step, _ = model.predict(
         x, 
         delta_x,
         build_masks = True
@@ -139,6 +149,10 @@ if __name__ == '__main__':
             test_sims
         )
         print(f'Test Features shape: {df_x_test.shape}')
+        if args.analytical:
+            phi_test = get_phi_test(phi_str)
+            
+            
         # Data used as features
         test(
             df = df_x_test,
