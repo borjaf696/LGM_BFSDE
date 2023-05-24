@@ -14,15 +14,16 @@ from utils.utils.utils import (
 )
 
 from trainer.trainer import trainer
-
+# TODO: Reformat
 def parse_args():
     parser = argparse.ArgumentParser(description="Descripción del programa")
     
-    parser.add_argument("-p", "--phi", type=str, help="Phi function to be used irs/swaption/zerobond (default zerobond)", default = 'zerobond')
-    parser.add_argument("-n", "--nsims", type=str, help="Number of simulations (default 1000)", default=1000)
-    parser.add_argument("-t", "--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
-    parser.add_argument("-s", "--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
-    parser.add_argument("-q", "--nsteps", type=float, help="Number of steps for each path (default 100)", default=100)
+    parser.add_argument("--phi", type=str, help="Phi function to be used irs/swaption/zerobond (default zerobond)", default = 'zerobond')
+    parser.add_argument("--nsims", type=str, help="Number of simulations (default 1000)", default=1000)
+    parser.add_argument("--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
+    parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
+    parser.add_argument("--nsteps", type=float, help="Number of steps for each path (default 100)", default=100)
+    parser.add_argument("--exists-analytical", nargs="?", type=bool, help="Whether to use analytical model (default False)", default=False)
     parser.add_argument("--test", type=bool, help="Test", default = True)
     args = parser.parse_args()
     
