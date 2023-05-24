@@ -26,6 +26,7 @@ def trainer(
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
+    # TODO: Correct the 2 * T
     lgm_single_step = LGM_model_one_step(n_steps = N_steps, 
                                      T = T, 
                                      future_T = 2 * T,

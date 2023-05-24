@@ -333,6 +333,117 @@ class IRS():
         N = ZeroBond.N_tensor(T, xn, ct)
         return variable + fixed / N
 class Swaption():
+    
+    @staticmethod
+    def anuality_swap(
+        xn, 
+        T,
+        TN, 
+        ct, 
+        period = 6,  
+    ):
+        # Anuality params
+        tau = TAUS[period]
+        time_add = TIMES[period]
+        num_times = np.float64((T - TN) / time_add)
+        fixed = np.zeros(
+            np.shape(xn)
+        )
+        for i in range(1.0, num_times + 1):
+            fixed += ZeroBond.Z(xn, T, TN + i * time_add, ct)
+        
+        return fixed
+    @staticmethod
+    def par_swap(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+    ):  
+        pi = ZeroBond.Z(xn, t, Ti, ct)
+        pm = ZeroBond.Z(xn, t, Tm, ct)
+        fixed = Swaption.anuality_swap(
+            xn,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+            
+        return (pi - pm) / fixed
+    
+    @staticmethod
+    def positive_part_parswap(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03
+    ):
+        def max_between_zero(x):
+            return np.maximum(x, 0) 
+        par_swap = Swaption.par_swap(
+            xn,
+            t,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+        
+        return np.apply_along_axis(max_between_zero, axis = 1, arr = par_swap - K)
+    
+    @staticmethod
+    def Swaption_test(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03
+    ):
+        def integra_swap(xT):
+            first_term = Swaption.positive_part_parswap(
+                xT,
+                t,
+                Ti,
+                Tm,
+                ct,
+                period,
+                K
+            )
+            density_normal = Swaption.density_normal(
+                xT,
+                xn,
+                t,
+                Ti,
+                Tm
+            )
+            return first_term * density_normal
+            
+        import scipy.integrate as integrate
+        return integrate.quad(lambda x: integra_swap(x), -np.inf, np.inf)[0] 
+    
+    @staticmethod
+    def density_normal(
+        xT,
+        xn,
+        t,
+        Ti,
+        Tm
+    ):
+        mu = xn
+        std = FinanceUtils.C_tensor(xn, t, Ti) * FinanceUtils.C_tensor(xn, Ti, Tm)
+        
+        return 1 / np.sqrt(2 * np.pi * std**2) * np.exp((xT-mu)**2 / (2 * std**2))
+    
+    
+    
     @staticmethod
     @tf.function
     def Swaption(xn, 
@@ -344,13 +455,33 @@ class Swaption():
         tau = TAUS[period]
         time_add = TIMES[period]
         # Internal parameter
-        num_times = np.float64((TN - T) / time_add)
+        first_val = np.float64(1.0)
+        num_times = (TN - T) / time_add
         variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
-        fixed = 0.
-        for i in range(1.0, num_times + 1):
-            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
+        fixed = tf.zeros(
+            tf.shape(xn),
+            dtype = tf.float64
+        )
+        for i in range(first_val, num_times + 1):
+            fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
         fixed *= tau * K
-        return max(variable + fixed, 0)
+        # Fix shape for swaption
+        tensor_irs = tf.reshape(
+            (variable + fixed),
+            (variable.shape[0], 1)
+        )
+        zero_mask = tf.zeros(
+            (tensor_irs.shape[0], 1), 
+            dtype = tensor_irs.dtype
+        )
+        tensor_irs = tf.concat(
+            [
+                tensor_irs,
+                zero_mask
+            ],
+            axis = 1
+        )
+        return tf.reduce_max(tensor_irs, axis = 1)
         
     @staticmethod
     @tf.function
