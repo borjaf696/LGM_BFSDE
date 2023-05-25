@@ -23,7 +23,7 @@ class Losses():
                  mask_loss: tf.Tensor = None):
         
         # print(f'Predictions:{predictions[0,:]}, V: {v[0, :]}')
-        betas = [0.02, 0.02, 1.00 * 10000]
+        betas = [1.0, 1.0, 1.00 * 10000]
         # Tiles
         tile_multiples = tf.constant([1, N_steps], tf.int64)
         samples, _ = x.shape

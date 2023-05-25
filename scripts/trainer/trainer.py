@@ -7,7 +7,7 @@ import pandas as pd
 import time 
 
 def trainer(
-        epochs: int = 50,
+        epochs: int = 100,
         size_of_the_batch: int = 100,
         *,
         T: int,
@@ -20,7 +20,7 @@ def trainer(
 ):
     model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(nsims)+ '.h5'
     # Fixed for now
-    epochs = 50
+    epochs = epochs
     # Batch execution with baby steps
     size_of_the_batch = 100
     batch_size = size_of_the_batch * N_steps

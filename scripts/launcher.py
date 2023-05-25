@@ -13,17 +13,23 @@ from utils.utils.utils import (
     FinanceUtils
 )
 
+from utils.tester.tester import (
+    SwaptionTester,
+    ZeroBondTester,
+    IRSTester
+)
+
 from trainer.trainer import trainer
 # TODO: Reformat
 def parse_args():
     parser = argparse.ArgumentParser(description="Descripción del programa")
     
     parser.add_argument("--phi", type=str, help="Phi function to be used irs/swaption/zerobond (default zerobond)", default = 'zerobond')
-    parser.add_argument("--nsims", type=str, help="Number of simulations (default 1000)", default=1000)
+    parser.add_argument("--TM", type = int, help = "Time to end Swap/IRS (default 8)", default = 8)
     parser.add_argument("--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
+    parser.add_argument("--nsims", type=str, help="Number of simulations (default 1000)", default=1000)
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("--nsteps", type=float, help="Number of steps for each path (default 100)", default=100)
-    parser.add_argument("--analytical", nargs="?", type=bool, help="Whether to use analytical model (default False)", default=False)
     parser.add_argument("--test", type=bool, help="Test", default = True)
     args = parser.parse_args()
     
@@ -42,55 +48,19 @@ def get_phi(active):
 def get_phi_test(active):
     phi = None
     if active == 'zerobond':
-        phi = ZeroBond.Z
+        phi = ZeroBondTester()
     elif active == 'irs':
-        phi = IRS.IRS_test
+        phi = IRSTester()
     elif active =='swaption':
-        phi = Swaption.Swaption_test
+        phi = SwaptionTester()
     return phi
-
-# TODO: Move to a tester
-def test(df, model, test_name_file = None, sigma_value = None):
-    assert test_name_file is not None, 'Test name file is not provided'
-    
-    mc_paths_tranformed = df[['xt', 'dt']].values
-    x = mc_paths_tranformed.astype(np.float64)
-    delta_x = df._delta_x.values.astype(np.float64)
-    v_lgm_single_step, _ = model.predict(
-        x, 
-        delta_x,
-        build_masks = True
-    )
-    # TODO: denormalize
-    results = pd.DataFrame(
-        zip(v_lgm_single_step),
-        columns = ['results']
-    )
-    v_lgm_single_step = results.explode('results').values
-    df['lgm_single_step_V'] = v_lgm_single_step.astype(np.float64)
-    # Calculate C and N
-    t_unique = df.dt.unique()
-    dict_C = {dt:FinanceUtils.C(dt, sigma_value = sigma) for dt in t_unique}
-    df['ct'] = df.apply(lambda x: dict_C[x['dt']], axis = 1)
-    df['N'] = ZeroBond.N(
-        df.dt.values.astype(np.float64),
-        df.xt.values.astype(np.float64),
-        df.ct.values.astype(np.float64)
-    )
-    df['V_est'] = df.lgm_single_step_V / df.N
-    # Export to file
-    df.to_csv(
-        test_name_file, 
-        index = False,
-        sep = ';'
-    )
-    print(f'Results saved to: {test_name_file}')
     
 if __name__ == '__main__':
     args = parse_args()
     # Configs
-    T, N_steps, X0, sigma = (
+    T, TM, N_steps, X0, sigma = (
         args.T, 
+        args.TM,
         args.nsteps,
         0, 
         args.sigma
@@ -149,15 +119,15 @@ if __name__ == '__main__':
             test_sims
         )
         print(f'Test Features shape: {df_x_test.shape}')
-        if args.analytical:
-            phi_test = get_phi_test(phi_str)
-            
-            
+        tester = get_phi_test(phi_str)
+             
         # Data used as features
-        test(
+        tester.test(
             df = df_x_test,
             model = model,
             test_name_file = test_name_file,
             # TODO: Deprecate this
-            sigma_value = sigma
+            sigma_value = sigma,
+            TM = args.TM,
+            T = T
         )
