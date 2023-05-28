@@ -345,14 +345,14 @@ class Swaption():
         # Anuality params
         tau = TAUS[period]
         time_add = TIMES[period]
-        num_times = np.float64((T - TN) / time_add)
+        num_times = int(np.float64((T - TN) / time_add))
         fixed = np.zeros(
             np.shape(xn)
         )
-        for i in range(1.0, num_times + 1):
+        for i in range(1, num_times + 1):
             fixed += ZeroBond.Z(xn, T, TN + i * time_add, ct)
         
-        return fixed
+        return tau * fixed
     @staticmethod
     def par_swap(
         xn,
@@ -398,6 +398,19 @@ class Swaption():
         return np.apply_along_axis(max_between_zero, axis = 1, arr = par_swap - K)
     
     @staticmethod
+    def density_normal(
+        xT,
+        xn,
+        t,
+        Ti,
+        Tm
+    ):
+        mu = xn
+        std = FinanceUtils.C_tensor(xn, t, Ti) * FinanceUtils.C_tensor(xn, Ti, Tm)
+        
+        return 1 / np.sqrt(2 * np.pi * std**2) * np.exp((xT-mu)**2 / (2 * std**2))
+    
+    @staticmethod
     def Swaption_test(
         xn,
         t,
@@ -408,7 +421,7 @@ class Swaption():
         K = 0.03
     ):
         def integra_swap(xT):
-            first_term = Swaption.positive_part_parswap(
+            par_swap = Swaption.positive_part_parswap(
                 xT,
                 t,
                 Ti,
@@ -424,25 +437,18 @@ class Swaption():
                 Ti,
                 Tm
             )
-            return first_term * density_normal
+            anuality_term = Swaption.anuality_swap(
+                xT,
+                t,
+                Ti,
+                Tm,
+                ct,
+                period
+            )
+            return par_swap * anuality_term * density_normal
             
         import scipy.integrate as integrate
-        return integrate.quad(lambda x: integra_swap(x), -np.inf, np.inf)[0] 
-    
-    @staticmethod
-    def density_normal(
-        xT,
-        xn,
-        t,
-        Ti,
-        Tm
-    ):
-        mu = xn
-        std = FinanceUtils.C_tensor(xn, t, Ti) * FinanceUtils.C_tensor(xn, Ti, Tm)
-        
-        return 1 / np.sqrt(2 * np.pi * std**2) * np.exp((xT-mu)**2 / (2 * std**2))
-    
-    
+        return integrate.quad(lambda x: integra_swap(x), -np.inf, np.inf)[0]     
     
     @staticmethod
     @tf.function

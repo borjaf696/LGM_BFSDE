@@ -58,7 +58,8 @@ class LGM_model_one_step(tf.keras.Model):
         # --- T, strike time
         configuration = None
         with open('configs/ff_config.json', 'r+') as f:
-            configuration = json.load(f)[name][str(T)]
+            configuration = json.load(f)[name][str(int(T))]
+        print(f'Configuration: {configuration}')
         self.__num_layers = configuration['layers']
         for i in range(self.__num_layers):
             objective_layer = x if i >0 else input_tmp
@@ -87,7 +88,7 @@ class LGM_model_one_step(tf.keras.Model):
         # Duration each step
         self._deltaT = T / self.N
         # Constantes:
-        print(f'T: {T}')
+        print(f'T: {T}, {self.T}')
         self._ct = FinanceUtils.C(T, sigma_value = sigma)
         # Status variables
         self._grads, self._predictions = None, None
@@ -174,7 +175,7 @@ class LGM_model_one_step(tf.keras.Model):
             tape.watch(x)
             v = self.predict(x)
             predictions = tf.Variable(self._predictions, trainable = False)   
-            loss = self._loss_lgm(x = x, v = v, predictions = predictions, N_steps = N_steps)
+            loss = self._loss_lgm(x = x, v = v, predictions = predictions, N_steps = self.N)
         # Get trainable vars
         trainable_vars = self.trainable_weights
         grads = tape.gradient(loss, trainable_vars)
@@ -319,7 +320,8 @@ class LGM_model_one_step(tf.keras.Model):
 
     def predict(self, X:tf.Tensor, 
                 delta_x:tf.Tensor,
-                build_masks: bool = False):
+                build_masks: bool = False,
+                debug: bool = False):
         """_summary_
 
         Args:
@@ -328,10 +330,11 @@ class LGM_model_one_step(tf.keras.Model):
         Returns:
             _type_: _description_
         """
-        sample_size = X.shape[0]
-        batch_size = X.shape[0] // self.N
         # Predict
         predictions = self._custom_model(X)
+        if debug:
+            print(f'Predictions shape: {predictions.shape}')
+            print(f'Predictions: {predictions}')
         predictions_rolled = tf.roll(
             predictions,
             shift = 1,

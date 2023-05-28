@@ -321,7 +321,8 @@ class LGM_model_one_step(tf.keras.Model):
 
     def predict(self, X:tf.Tensor, 
                 delta_x:tf.Tensor,
-                build_masks: bool = False):
+                build_masks: bool = False,
+                debug: bool = False):
         """_summary_
 
         Args:
@@ -330,10 +331,11 @@ class LGM_model_one_step(tf.keras.Model):
         Returns:
             _type_: _description_
         """
-        sample_size = X.shape[0]
-        batch_size = X.shape[0] // self.N
         # Predict
         predictions = self._custom_model(X)
+        if debug:
+            print(f'Predictions shape: {predictions.shape}')
+            print(f'Predictions: {predictions}')
         predictions = tf.cast(
             predictions, 
             dtype=tf.float64

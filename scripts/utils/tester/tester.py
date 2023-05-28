@@ -35,10 +35,14 @@ class Tester(ABC):
         t_unique = df.dt.unique()
         dict_C = {dt:FinanceUtils.C(dt, sigma_value = sigma_value) for dt in t_unique}
         df['ct'] = df.apply(lambda x: dict_C[x['dt']], axis = 1)
-        df['N'] = ZeroBond.N(
-            df.dt.values.astype(np.float64),
-            df.xt.values.astype(np.float64),
-            df.ct.values.astype(np.float64)
+        df['N'] = df.apply(
+            lambda x: 
+                ZeroBond.N(
+                    x['dt'],
+                    x.xt,
+                    x.ct
+                ),
+            axis = 1
         )
         df['V_est'] = df.lgm_single_step_V * df.N
 
@@ -58,11 +62,15 @@ class ZeroBondTester(Tester):
             model,  
             sigma_value
         )
-        df['V'] = ZeroBond.Z(
-            df.xt.values.astype(np.float64),
-            df.dt.values.astype(np.float64),
-            np.float64(df.dt.max()),
-            df.ct.values.astype(np.float64)
+        df['V'] = df.apply(
+            lambda x:
+                ZeroBond.Z(
+                    x.xt,
+                    x['dt'],
+                    T,  
+                    x.ct
+                ),
+                axis = 1
         )
         
         folder = '/'.join(
@@ -84,10 +92,9 @@ class IRSTester(Tester):
     def test(self, df, model, test_name_file, sigma_value, TM = None, T = None):
         assert test_name_file is not None, 'Test name file is not provided'
         
-        df = super.__calculate_basics(
+        df = super()._calculate_basics(
             df, 
             model, 
-            test_name_file, 
             sigma_value
         )
         print(f'Please provide the IRS analytical formula')
@@ -110,10 +117,9 @@ class SwaptionTester(Tester):
     def test(self, df, model, test_name_file, sigma_value, TM = None, T = None):
         assert test_name_file is not None, 'Test name file is not provided'
         
-        df = super.__calculate_basics(
+        df = super()._calculate_basics(
             df, 
             model, 
-            test_name_file, 
             sigma_value
         )
         

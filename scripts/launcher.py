@@ -27,7 +27,7 @@ def parse_args():
     parser.add_argument("--phi", type=str, help="Phi function to be used irs/swaption/zerobond (default zerobond)", default = 'zerobond')
     parser.add_argument("--TM", type = int, help = "Time to end Swap/IRS (default 8)", default = 8)
     parser.add_argument("--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
-    parser.add_argument("--nsims", type=str, help="Number of simulations (default 1000)", default=1000)
+    parser.add_argument("--nsims", type=int, help="Number of simulations (default 1000)", default=1000)
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("--nsteps", type=float, help="Number of steps for each path (default 100)", default=100)
     parser.add_argument("--test", type=bool, help="Test", default = True)
@@ -119,6 +119,7 @@ if __name__ == '__main__':
             test_sims
         )
         print(f'Test Features shape: {df_x_test.shape}')
+        print(f'Test columns: {df_x_test.columns}')
         tester = get_phi_test(phi_str)
              
         # Data used as features
