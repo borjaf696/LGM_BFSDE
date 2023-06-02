@@ -113,7 +113,7 @@ class IRSTester(Tester):
         )
         
 class SwaptionTester(Tester):
-    
+    # TODO: Swaption needs more parameters
     def test(self, df, model, test_name_file, sigma_value, TM = None, T = None):
         assert test_name_file is not None, 'Test name file is not provided'
         
@@ -122,13 +122,13 @@ class SwaptionTester(Tester):
             model, 
             sigma_value
         )
-        
         df['V'] = Swaption.Swaption_test(
-            df.xt.values.astype(np.float64),
-            df.dt.values.astype(np.float64),
-            T,
-            TM,
-            df.ct.values.astype(np.float64)
+            xn = df.xt.values.astype(np.float64),
+            t = df.dt.values.astype(np.float64),
+            Ti = T,
+            Tm = TM,
+            ct = df.ct.values.astype(np.float64),
+            sigma_value = sigma_value
         )
         
         folder = '/'.join(

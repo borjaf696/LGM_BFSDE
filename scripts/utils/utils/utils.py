@@ -1,5 +1,19 @@
 import tensorflow as tf
 import numpy as np
+from scipy.stats import norm
+import sys
+
+# Constants
+TAUS = {
+    3: 0.25,
+    6: 0.5,
+    12: 1.0
+}
+TIMES = {
+    3: 0.25,
+    6: 0.5,
+    12:1.0
+}
 
 class MathUtils():
     
@@ -276,18 +290,6 @@ class ZeroBond():
         """
         return tf.math.multiply(ZeroBond.Z_tensor(xn, tn, T, ct), 1/ ZeroBond.N_tensor(tn, xn, ct))
 
-# Constants
-TAUS = {
-    3: 0.25,
-    6: 0.5,
-    12: 1.0
-}
-TIMES = {
-    3: 0.25,
-    6: 0.5,
-    12:1.0
-}
-
 class IRS():
     @staticmethod
     @tf.function
@@ -345,14 +347,12 @@ class Swaption():
         # Anuality params
         tau = TAUS[period]
         time_add = TIMES[period]
-        num_times = int(np.float64((T - TN) / time_add))
-        fixed = np.zeros(
-            np.shape(xn)
-        )
+        num_times = int(np.float64((TN - T) / time_add))
+        fixed = 0
         for i in range(1, num_times + 1):
-            fixed += ZeroBond.Z(xn, T, TN + i * time_add, ct)
-        
+            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
         return tau * fixed
+    
     @staticmethod
     def par_swap(
         xn,
@@ -364,6 +364,7 @@ class Swaption():
     ):  
         pi = ZeroBond.Z(xn, t, Ti, ct)
         pm = ZeroBond.Z(xn, t, Tm, ct)
+        # For anuality we only require last Zeta_t
         fixed = Swaption.anuality_swap(
             xn,
             Ti,
@@ -371,8 +372,11 @@ class Swaption():
             ct,
             period
         )
-            
-        return (pi - pm) / fixed
+        print(f'Fixed: {fixed}')
+        print(f'Pi: {pi}')
+        print(f'Pm: {pm}')
+        print(f'{(pi - pm)/fixed}')
+        return (pi - pm) / (fixed + 1e-8)
     
     @staticmethod
     def positive_part_parswap(
@@ -384,8 +388,6 @@ class Swaption():
         period = 6,
         K = 0.03
     ):
-        def max_between_zero(x):
-            return np.maximum(x, 0) 
         par_swap = Swaption.par_swap(
             xn,
             t,
@@ -394,21 +396,19 @@ class Swaption():
             ct,
             period
         )
-        
-        return np.apply_along_axis(max_between_zero, axis = 1, arr = par_swap - K)
+        return np.maximum(0, par_swap - K)
     
     @staticmethod
     def density_normal(
         xT,
         xn,
-        t,
-        Ti,
-        Tm
+        ct,
+        cti
     ):
         mu = xn
-        std = FinanceUtils.C_tensor(xn, t, Ti) * FinanceUtils.C_tensor(xn, Ti, Tm)
-        
-        return 1 / np.sqrt(2 * np.pi * std**2) * np.exp((xT-mu)**2 / (2 * std**2))
+        std = ct * cti
+        p = norm.pdf(xT, mu, std)
+        return p
     
     @staticmethod
     def Swaption_test(
@@ -418,37 +418,96 @@ class Swaption():
         Tm,
         ct,
         period = 6,
-        K = 0.03
+        K = 0.03,
+        sigma_value = 0.01
     ):
-        def integra_swap(xT):
+        def integra_swap(xT, xnj, tj, ctj):
+            print(f'xT: {xT}')
             par_swap = Swaption.positive_part_parswap(
-                xT,
-                t,
-                Ti,
-                Tm,
-                ct,
-                period,
-                K
+                xn = xT,
+                t = tj,
+                Ti = Ti,
+                Tm = Tm,
+                ct = ctj,
+                period = period,
+                K = K
             )
+            print(f'Par swap: {par_swap}')
             density_normal = Swaption.density_normal(
                 xT,
-                xn,
-                t,
-                Ti,
-                Tm
+                xnj,
+                ct = ctj,
+                cti = cti
             )
+            density_normal = density_normal / np.sum(density_normal)
+            print(f'Density normal: {density_normal}')
+            print(f'Total density: {np.sum(density_normal)}')
             anuality_term = Swaption.anuality_swap(
                 xT,
-                t,
-                Ti,
+                tj,
                 Tm,
-                ct,
+                cti,
                 period
             )
+            print(f'Anuality term: {anuality_term}')
+            print(np.sum(par_swap * anuality_term * density_normal))
             return par_swap * anuality_term * density_normal
             
         import scipy.integrate as integrate
-        return integrate.quad(lambda x: integra_swap(x), -np.inf, np.inf)[0]     
+        ct_dict = dict()
+        ts_unique = np.unique(t)
+        for t_unique in ts_unique:
+            ct_dict[t_unique] = FinanceUtils.C(
+                t_unique,
+                sigma_value
+            )
+        cti = FinanceUtils.C(
+            Ti,
+            sigma_value
+        )    
+        swaption_results = []
+        i = (t == Ti)
+        tni = np.float64(t[i][0])
+        xni = np.float64(xn[i][0])
+        cti = np.float64(ct[i][0])
+        integrate_swap = integrate.fixed_quad(
+                    integra_swap, 
+                    xni - 4 * cti**2, 
+                    xni + 4 * cti**2, 
+                    n = 100,
+                    args = (
+                        xni,
+                        tni,
+                        cti    
+                    ))[0]  
+        xni = tf.constant([xni], dtype = tf.float64)
+        Ti = np.float64(Ti)
+        Tm = np.float64(Tm)
+        final_swap = Swaption.Swaption_normalized(
+            xni,
+            Ti,
+            Tm,
+            cti
+        )
+        print(f'Integrate swap: {integrate_swap}')
+        print(f'Final swap: {final_swap}')
+        sys.exit(0)
+        '''for i, _ in enumerate(t):
+            ti = t[i]
+            xni = xn[i]
+            cti = ct[i]
+            swaption_results.append(
+                integrate.quad(
+                    integra_swap, 
+                    -10, 
+                    10,
+                    args = (
+                        xni,
+                        ti,
+                        cti    
+                    ))[0]    
+            )'''
+        return  
     
     @staticmethod
     @tf.function
@@ -528,4 +587,4 @@ class Swaption():
             ],
             axis = 1
         )
-        return tf.reduce_max(tensor_irs, axis = 1) / N
+        return tf.reduce_max(tensor_irs, axis = 1) #/ N

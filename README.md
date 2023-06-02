@@ -10,17 +10,17 @@ Install the environment. The next step will build a folder ***.venv*** which sto
 
 <pre><code> hatch run python</code></pre>
 
-You are good to run the notebooks stored in ***notebooks/***
+#### Launcher:
+
+To launch the code:
+
+- `parámetro1`:
+- `parámetro2`: 
+- `parámetro3`: 
 
 ## Todo:
 
-- [ ] MC simulation
-  - [ ] Brownian motion paths
-- [ ] Define Neural Network models:
-  - [ ] Single step model
-  - [ ] Sequence model
-  - [ ] ...
 - [ ] Sanities:
   - [ ] ZeroBond
   - [ ] IRS
-  - [ ] ...
+  - [ ] Swaption

@@ -11,6 +11,7 @@ def trainer(
         size_of_the_batch: int = 100,
         *,
         T: int,
+        TM: int,
         N_steps: int,
         sigma: float,
         nsims: int,
@@ -18,7 +19,10 @@ def trainer(
         phi_str: str,
         df_x: pd.DataFrame,
 ):
-    model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(nsims)+ '.h5'
+    if TM is not None:
+        model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(TM) + '_' + str(nsims)+ '.h5'
+    else:
+        model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(nsims) + '.h5'
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
@@ -27,9 +31,7 @@ def trainer(
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
     # TODO: Correct the 2 * T
-    future_T = 2 * T
-    if phi_str == 'zerobond':
-        future_T = T
+    future_T = TM if TM is not None else T
     lgm_single_step = LGM_model_one_step(n_steps = N_steps, 
                                      T = T, 
                                      future_T = future_T,
@@ -58,7 +60,7 @@ def trainer(
     # Custom iteration: 
     epoch = 0
     loss = np.infty
-    while loss > 0.01 and epoch < epochs:
+    while loss > 0.001 and epoch < epochs:
         print(f'{epoch}...', end = '')
         for batch in range(batches):
             start_time = time.time()
