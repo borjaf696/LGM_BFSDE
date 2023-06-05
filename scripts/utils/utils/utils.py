@@ -406,7 +406,10 @@ class Swaption():
         cti
     ):
         mu = xn
-        std = ct * cti
+        print(f'ct {ct}')
+        print(f'cti {cti}')
+        sys.exit(1)
+        std = ct - cti
         p = norm.pdf(xT, mu, std)
         return p
     
@@ -472,8 +475,8 @@ class Swaption():
         cti = np.float64(ct[i][0])
         integrate_swap = integrate.fixed_quad(
                     integra_swap, 
-                    xni - 4 * cti**2, 
-                    xni + 4 * cti**2, 
+                    xni - 4 * cti, 
+                    xni + 4 * cti, 
                     n = 100,
                     args = (
                         xni,
