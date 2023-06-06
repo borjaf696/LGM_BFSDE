@@ -403,13 +403,11 @@ class Swaption():
         xT,
         xn,
         ct,
-        cti
+        cT
     ):
         mu = xn
-        print(f'ct {ct}')
-        print(f'cti {cti}')
-        sys.exit(1)
-        std = ct - cti
+        std = cT - ct
+        print(f'std: {std}')
         p = norm.pdf(xT, mu, std)
         return p
     
@@ -424,14 +422,14 @@ class Swaption():
         K = 0.03,
         sigma_value = 0.01
     ):
-        def integra_swap(xT, xnj, tj, ctj):
+        def integra_swap(xT, xnj, tj, ct):
             print(f'xT: {xT}')
             par_swap = Swaption.positive_part_parswap(
                 xn = xT,
                 t = tj,
                 Ti = Ti,
                 Tm = Tm,
-                ct = ctj,
+                ct = ct,
                 period = period,
                 K = K
             )
@@ -439,8 +437,8 @@ class Swaption():
             density_normal = Swaption.density_normal(
                 xT,
                 xnj,
-                ct = ctj,
-                cti = cti
+                ct = ct,
+                cT = cT
             )
             density_normal = density_normal / np.sum(density_normal)
             print(f'Density normal: {density_normal}')
@@ -449,7 +447,7 @@ class Swaption():
                 xT,
                 tj,
                 Tm,
-                cti,
+                cT,
                 period
             )
             print(f'Anuality term: {anuality_term}')
@@ -464,24 +462,24 @@ class Swaption():
                 t_unique,
                 sigma_value
             )
-        cti = FinanceUtils.C(
+        cT = FinanceUtils.C(
             Ti,
             sigma_value
         )    
         swaption_results = []
-        i = (t == Ti)
+        i = (t == 0)
         tni = np.float64(t[i][0])
         xni = np.float64(xn[i][0])
-        cti = np.float64(ct[i][0])
+        ct = np.float64(ct[i][0])
         integrate_swap = integrate.fixed_quad(
                     integra_swap, 
-                    xni - 4 * cti, 
-                    xni + 4 * cti, 
+                    xni - 4 * (cT - ct), 
+                    xni + 4 * (cT - ct), 
                     n = 100,
                     args = (
                         xni,
                         tni,
-                        cti    
+                        ct    
                     ))[0]  
         xni = tf.constant([xni], dtype = tf.float64)
         Ti = np.float64(Ti)
@@ -490,7 +488,7 @@ class Swaption():
             xni,
             Ti,
             Tm,
-            cti
+            ct
         )
         print(f'Integrate swap: {integrate_swap}')
         print(f'Final swap: {final_swap}')
@@ -511,6 +509,12 @@ class Swaption():
                     ))[0]    
             )'''
         return  
+    
+    @staticmethod
+    def Swaption_at_zero(
+        
+    ):
+        pass
     
     @staticmethod
     @tf.function
