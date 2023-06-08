@@ -372,6 +372,7 @@ class Swaption():
             ct,
             period
         )
+        print(f'Xn: {xn}')
         print(f'Fixed: {fixed}')
         print(f'Pi: {pi}')
         print(f'Pm: {pm}')
@@ -422,10 +423,10 @@ class Swaption():
         K = 0.03,
         sigma_value = 0.01
     ):
-        def integra_swap(xT, xnj, tj, ct):
+        def integra_swap(xT, xnj, xnT, tj, ct):
             print(f'xT: {xT}')
             par_swap = Swaption.positive_part_parswap(
-                xn = xT,
+                xn = xnT,
                 t = tj,
                 Ti = Ti,
                 Tm = Tm,
@@ -468,9 +469,12 @@ class Swaption():
         )    
         swaption_results = []
         i = (t == 0)
+        iT = (t == Ti)
         tni = np.float64(t[i][0])
         xni = np.float64(xn[i][0])
+        xnT = np.float64(xn[iT][0])
         ct = np.float64(ct[i][0])
+        print(f'Parameters: {xni}, {xnT}, {tni}, {Ti}, {Tm}, {ct}')
         integrate_swap = integrate.fixed_quad(
                     integra_swap, 
                     xni - 4 * (cT - ct), 
@@ -478,6 +482,7 @@ class Swaption():
                     n = 100,
                     args = (
                         xni,
+                        xnT,
                         tni,
                         ct    
                     ))[0]  
