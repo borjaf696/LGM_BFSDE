@@ -161,7 +161,7 @@ class FinanceUtils():
     
 class ZeroBond():  
     @staticmethod
-    def H_tensor(t, kappa = 2):
+    def H_tensor(t, kappa = 0.02):
         """_summary_
 
         Args:
@@ -225,7 +225,7 @@ class ZeroBond():
         """
         return np.exp(-r * t)
     @staticmethod
-    def H(t, kappa = 2):
+    def H(t, kappa = 0.02):
         """_summary_
 
         Args:
@@ -356,14 +356,13 @@ class Swaption():
     @staticmethod
     def par_swap(
         xn,
-        t,
         Ti,
         Tm,
         ct,
         period = 6,
     ):  
-        pi = ZeroBond.Z(xn, t, Ti, ct)
-        pm = ZeroBond.Z(xn, t, Tm, ct)
+        pi = ZeroBond.Z(xn, Ti, Ti, ct)
+        pm = ZeroBond.Z(xn, Ti, Tm, ct)
         # For anuality we only require last Zeta_t
         fixed = Swaption.anuality_swap(
             xn,
@@ -372,17 +371,11 @@ class Swaption():
             ct,
             period
         )
-        print(f'Xn: {xn}')
-        print(f'Fixed: {fixed}')
-        print(f'Pi: {pi}')
-        print(f'Pm: {pm}')
-        print(f'{(pi - pm)/fixed}')
-        return (pi - pm) / (fixed + 1e-8)
+        return (pi - pm) / (fixed)
     
     @staticmethod
     def positive_part_parswap(
         xn,
-        t,
         Ti,
         Tm,
         ct,
@@ -391,7 +384,6 @@ class Swaption():
     ):
         par_swap = Swaption.par_swap(
             xn,
-            t,
             Ti,
             Tm,
             ct,
@@ -407,8 +399,7 @@ class Swaption():
         cT
     ):
         mu = xn
-        std = cT - ct
-        print(f'std: {std}')
+        std = np.sqrt(cT - ct)
         p = norm.pdf(xT, mu, std)
         return p
     
@@ -421,39 +412,33 @@ class Swaption():
         ct,
         period = 6,
         K = 0.03,
-        sigma_value = 0.01
+        sigma_value = 0.01,
+        predictions = None,
+        debug = False
     ):
-        def integra_swap(xT, xnj, xnT, tj, ct):
-            print(f'xT: {xT}')
+        def integra_swap(xT, xnj, ct, cT):
             par_swap = Swaption.positive_part_parswap(
-                xn = xnT,
-                t = tj,
+                xn = xT,
                 Ti = Ti,
                 Tm = Tm,
-                ct = ct,
+                ct = cT,
                 period = period,
                 K = K
             )
-            print(f'Par swap: {par_swap}')
             density_normal = Swaption.density_normal(
                 xT,
                 xnj,
                 ct = ct,
                 cT = cT
             )
-            density_normal = density_normal / np.sum(density_normal)
-            print(f'Density normal: {density_normal}')
-            print(f'Total density: {np.sum(density_normal)}')
             anuality_term = Swaption.anuality_swap(
                 xT,
-                tj,
+                Ti,
                 Tm,
                 cT,
                 period
             )
-            print(f'Anuality term: {anuality_term}')
-            print(np.sum(par_swap * anuality_term * density_normal))
-            return par_swap * anuality_term * density_normal
+            return (par_swap * anuality_term * density_normal) / ZeroBond.N(Ti, xT, cT)
             
         import scipy.integrate as integrate
         ct_dict = dict()
@@ -468,58 +453,106 @@ class Swaption():
             sigma_value
         )    
         swaption_results = []
-        i = (t == 0)
-        iT = (t == Ti)
-        tni = np.float64(t[i][0])
-        xni = np.float64(xn[i][0])
-        xnT = np.float64(xn[iT][0])
-        ct = np.float64(ct[i][0])
-        print(f'Parameters: {xni}, {xnT}, {tni}, {Ti}, {Tm}, {ct}')
-        integrate_swap = integrate.fixed_quad(
-                    integra_swap, 
-                    xni - 4 * (cT - ct), 
-                    xni + 4 * (cT - ct), 
-                    n = 100,
-                    args = (
-                        xni,
-                        xnT,
-                        tni,
-                        ct    
-                    ))[0]  
-        xni = tf.constant([xni], dtype = tf.float64)
-        Ti = np.float64(Ti)
-        Tm = np.float64(Tm)
-        final_swap = Swaption.Swaption_normalized(
-            xni,
-            Ti,
-            Tm,
-            ct
-        )
-        print(f'Integrate swap: {integrate_swap}')
-        print(f'Final swap: {final_swap}')
-        sys.exit(0)
-        '''for i, _ in enumerate(t):
-            ti = t[i]
+        # TODO: Clean
+        if debug == True:
+            i = (t == 0)
+            prediction = np.float64(predictions[i][0])
+            xni = np.float64(xn[i][0])
+            ct = np.float64(ct[i][0])
+            integrate_swap = integrate.fixed_quad(
+                        integra_swap, 
+                        xni - 6 * np.sqrt((cT - ct)), 
+                        xni + 6 * np.sqrt((cT - ct)), 
+                        n = 1000,
+                        args = (
+                            xni,
+                            ct,
+                            cT    
+                        )
+                    ) 
+            xni = tf.constant([xni], dtype = tf.float64)
+            Ti = np.float64(Ti)
+            Tm = np.float64(Tm)
+            v_zero = Swaption.Swaption_at_zero(
+                cT,
+                Ti,
+                Tm,
+                period = period,
+                K = K
+            )
+            print(f'Prediction: {prediction}')
+            print(f'Integrate swap: {integrate_swap}')
+            print(f'Analytical result: {v_zero}')
+            sys.exit(0)
+        for i, _ in enumerate(t):
             xni = xn[i]
             cti = ct[i]
             swaption_results.append(
-                integrate.quad(
+                integrate.fixed_quad(
                     integra_swap, 
-                    -10, 
-                    10,
+                    xni - 6 * np.sqrt((cT - cti)), 
+                    xni + 6 * np.sqrt((cT - cti)), 
                     args = (
                         xni,
-                        ti,
-                        cti    
+                        cti,
+                        cT    
                     ))[0]    
-            )'''
-        return  
+            )
+        return swaption_results  
     
     @staticmethod
     def Swaption_at_zero(
+        ceta_T,
+        T,
+        TN,
+        period = 6,
+        K = 0.03,
+    ):    
+        from scipy.optimize import fsolve
+        import numpy as np
+
+        def fystar(x):
+            # First term
+            exponential_first_term = - deltaHN * x
+            exponential_second_term = - 0.5 * deltaHN**2*ceta_T
+            first_term = ZeroBond.D(TN) * np.exp(exponential_first_term + exponential_second_term)
+            # Second term
+            second_term = 0
+            for i in range(1, num_times + 1):
+                Ti = T + i * time_add
+                deltaHi = ZeroBond.H(Ti) - ZeroBond.H(T)
+                exponential_first_term_second = -deltaHi * x
+                exponential_second_term_second = -0.5 * deltaHi**2*ceta_T
+                second_term += ZeroBond.D(Ti) * np.exp(exponential_first_term_second + exponential_second_term_second)
+            second_term *= tau * K
+            # Third term
+            third_term = - ZeroBond.D(T)
+            return first_term + second_term + third_term
         
-    ):
-        pass
+        print(f'Parameters: {ceta_T}, {T}, {TN}, {period}, {K}')
+        deltaHN = ZeroBond.H(TN) - ZeroBond.H(T)
+        print(f'deltaHN: {deltaHN}')
+        tau = TAUS[period]
+        time_add = TIMES[period]
+        num_times = int(np.float64((TN - T) / time_add))
+        x0 = 0
+        y_star = fsolve(fystar, x0)
+        print(f'y_star: {y_star}')
+        print(f'Function result: {fystar(y_star)}')
+        # First term
+        first_term = ZeroBond.D(T) * norm.cdf(- y_star/np.sqrt(ceta_T), 0, 1)
+        # Second term
+        second_term = - ZeroBond.D(TN) * norm.cdf(- (y_star + deltaHN*ceta_T)/np.sqrt(ceta_T), 0, 1)
+        # Third term
+        third_term = 0
+        for i in range(1, num_times + 1):
+            Ti = T + i * time_add
+            deltaHi = ZeroBond.H(Ti) - ZeroBond.H(T)
+            third_term += ZeroBond.D(Ti) * norm.cdf( - (y_star + deltaHi * ceta_T) / np.sqrt(ceta_T), 0, 1)
+        print(f'Final i: {i}, {Ti}')
+        third_term *= - tau * K
+        return first_term + second_term + third_term
+
     
     @staticmethod
     @tf.function
@@ -541,7 +574,7 @@ class Swaption():
         )
         for i in range(first_val, num_times + 1):
             fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
-        fixed *= tau * K
+        fixed *= - tau * K
         # Fix shape for swaption
         tensor_irs = tf.reshape(
             (variable + fixed),
@@ -558,6 +591,7 @@ class Swaption():
             ],
             axis = 1
         )
+        
         return tf.reduce_max(tensor_irs, axis = 1)
         
     @staticmethod
@@ -580,7 +614,7 @@ class Swaption():
         )
         for i in range(first_val, num_times + 1):
             fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
-        fixed *= tau * K
+        fixed *= - tau * K
         # Normalize factor
         N = ZeroBond.N_tensor(T, xn, ct)
         # Fix shape for swaption
@@ -599,4 +633,4 @@ class Swaption():
             ],
             axis = 1
         )
-        return tf.reduce_max(tensor_irs, axis = 1) #/ N
+        return tf.reduce_max(tensor_irs, axis = 1) / N

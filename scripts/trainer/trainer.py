@@ -7,7 +7,7 @@ import pandas as pd
 import time 
 
 def trainer(
-        epochs: int = 50,
+        epochs: int = 110,
         size_of_the_batch: int = 100,
         *,
         T: int,
@@ -60,7 +60,7 @@ def trainer(
     # Custom iteration: 
     epoch = 0
     loss = np.infty
-    while loss > 0.001 and epoch < epochs:
+    while loss > 0.00001 and epoch < epochs:
         print(f'{epoch}...', end = '')
         for batch in range(batches):
             start_time = time.time()

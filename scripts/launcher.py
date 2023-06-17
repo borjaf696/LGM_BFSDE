@@ -126,7 +126,8 @@ if __name__ == '__main__':
             T = T,  
             X0 = X0, 
             sigma = sigma,
-            period = 6
+            N = N_steps,
+            period = None
         )
         mc_paths_test, W_test = mcsimulator.simulate(
             test_sims

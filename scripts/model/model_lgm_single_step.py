@@ -51,7 +51,7 @@ class LGM_model_one_step(tf.keras.Model):
         self.__name = name
         # Model with time and value
         input_tmp = keras.Input(shape = (2, ), 
-                                name = 'input_nn')
+                                name = name)
         initializer = tf.keras.initializers.GlorotUniform(seed = 6543210)
         # Configuration read from:
         # --- name
@@ -68,10 +68,10 @@ class LGM_model_one_step(tf.keras.Model):
                     activation = 'relu',
                     kernel_initializer = initializer,
                     name = 'internal_relu_dense_'+str(i))(objective_layer)
-        output_tmp = layers.Dense(units = 1, 
-                                    activation = 'relu', 
-                                    kernel_initializer = initializer,
-                                    name = 'output_relu_dense')(x)
+        output_tmp = layers.Dense(
+            units = 1,  
+            kernel_initializer = initializer,
+            name = 'output_relu_dense')(x)
         self._custom_model = keras.Model(
             inputs = input_tmp,
             outputs = output_tmp,

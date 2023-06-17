@@ -128,7 +128,8 @@ class SwaptionTester(Tester):
             Ti = T,
             Tm = TM,
             ct = df.ct.values.astype(np.float64),
-            sigma_value = sigma_value
+            sigma_value = sigma_value,
+            predictions = df.lgm_single_step_V.values.astype(np.float64)
         )
         
         folder = '/'.join(

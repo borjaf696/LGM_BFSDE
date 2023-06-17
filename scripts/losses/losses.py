@@ -23,7 +23,7 @@ class Losses():
                  mask_loss: tf.Tensor = None):
         
         # print(f'Predictions:{predictions[0,:]}, V: {v[0, :]}')
-        betas = [0.02, 0.02, 1.00 * 10000]
+        betas = [1, 1, 1]
         # Tiles
         tile_multiples = tf.constant([1, N_steps], tf.int64)
         samples, _ = x.shape
@@ -82,7 +82,6 @@ class Losses():
         derivative_loss = tf.reshape(
             tf.math.squared_difference(
                 derivatives,
-                
                 df_dxn
             ), 
             (batch_size, 1))

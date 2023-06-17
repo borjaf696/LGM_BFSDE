@@ -5,7 +5,7 @@
             "hidden_units": 16
         },
         "2":{
-            "layers": 6,
+            "layers": 8,
             "hidden_units": 16
         },
         "4":{
@@ -13,7 +13,7 @@
             "hidden_units": 16
         },
         "8":{
-            "layers": 36,
+            "layers": 24,
             "hidden_units": 16
         }
     },

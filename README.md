@@ -15,12 +15,12 @@ Install the environment. The next step will build a folder ***.venv*** which sto
 To launch the code:
 
 - `parámetro1`:
-- `parámetro2`: 
-- `parámetro3`: 
+- `parámetro2`:
+- `parámetro3`:
 
 ## Todo:
 
-- [ ] Sanities:
-  - [ ] ZeroBond
-  - [ ] IRS
-  - [ ] Swaption
+- [X] Sanities:
+  - [X] ZeroBond
+  - [X] IRS
+  - [X] Swaption
