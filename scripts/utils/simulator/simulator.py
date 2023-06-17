@@ -8,15 +8,23 @@ from operator import itemgetter
 from scipy import stats
 from typing import Optional
 
+from utils.utils.utils import (
+    TIMES
+)
+
 class MCSimulation():
-    def __init__(self, T, N, X0, sigma, model = 'LGM'):
+    def __init__(self, T, X0, sigma, N = None, period = None, model = 'LGM'):
         self._params = {
             'T':T,
-            'N':N,
+            'N':N if period is None else int(T / TIMES[period]),
             'X0':X0,
             'sigma':sigma,
         }
         self._model = model
+       
+    @property 
+    def N(self):
+        return self._params['N']
         
     def simulate(self, nsim = 1e3, show = False):
         T, N, X0, sigma = itemgetter('T', 'N', 'X0', 'sigma')(self._params)

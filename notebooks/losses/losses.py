@@ -34,8 +34,18 @@ class Losses():
         # Loss given the strike function
         tn = np.float64(T)
         T = np.float64(TN)
-        strike_loss = tf.reshape(
+        '''strike_loss = tf.reshape(
             tf.math.squared_difference(predictions[:, -1], 
+                                       phi(
+                                           xn_tensor, 
+                                           tn,
+                                           T,
+                                           ct)
+                                        ), 
+            (batch_size,1)
+        )'''
+        strike_loss = tf.reshape(
+            tf.math.abs(predictions[:, -1] -
                                        phi(
                                            xn_tensor, 
                                            tn,

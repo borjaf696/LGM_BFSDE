@@ -51,7 +51,7 @@ class LGM_model_one_step(tf.keras.Model):
         self.__name = name
         # Model with time and value
         input_tmp = keras.Input(shape = (2, ), 
-                                name = 'input_nn')
+                                name = name)
         initializer = tf.keras.initializers.GlorotUniform(seed = 6543210)
         # Configuration read from:
         # --- name
@@ -60,16 +60,18 @@ class LGM_model_one_step(tf.keras.Model):
         with open('scripts/configs/ff_config.json', 'r+') as f:
             configuration = json.load(f)[name][str(T)]
         self.__num_layers = configuration['layers']
+        print(f'Number of layers: {self.__num_layers}')
+        print(f'Number of hidden units: {configuration["hidden_units"]}')
         for i in range(self.__num_layers):
             objective_layer = x if i >0 else input_tmp
             x = layers.Dense(units = configuration['hidden_units'],
                     activation = 'relu',
                     kernel_initializer = initializer,
                     name = 'internal_relu_dense_'+str(i))(objective_layer)
-        output_tmp = layers.Dense(units = 1, 
-                                    activation = 'relu', 
-                                    kernel_initializer = initializer,
-                                    name = 'output_relu_dense')(x)
+        output_tmp = layers.Dense(
+            units = 1,  
+            kernel_initializer = initializer,
+            name = 'output_relu_dense')(x)
         self._custom_model = keras.Model(
             inputs = input_tmp,
             outputs = output_tmp,
@@ -319,7 +321,8 @@ class LGM_model_one_step(tf.keras.Model):
 
     def predict(self, X:tf.Tensor, 
                 delta_x:tf.Tensor,
-                build_masks: bool = False):
+                build_masks: bool = False,
+                debug: bool = False):
         """_summary_
 
         Args:
@@ -328,10 +331,11 @@ class LGM_model_one_step(tf.keras.Model):
         Returns:
             _type_: _description_
         """
-        sample_size = X.shape[0]
-        batch_size = X.shape[0] // self.N
         # Predict
         predictions = self._custom_model(X)
+        if debug:
+            print(f'Predictions shape: {predictions.shape}')
+            print(f'Predictions: {predictions}')
         predictions = tf.cast(
             predictions, 
             dtype=tf.float64

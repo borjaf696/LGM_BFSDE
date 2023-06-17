@@ -1,5 +1,5 @@
 from typing import Any
-from model.model_lgm_single_step import LGM_model_one_step
+from scripts.model.model_lgm_single_step import LGM_model_one_step
 
 import numpy as np
 import pickle as pkl
@@ -7,10 +7,11 @@ import pandas as pd
 import time 
 
 def trainer(
-        epochs: int = 50,
+        epochs: int = 110,
         size_of_the_batch: int = 100,
         *,
         T: int,
+        TM: int,
         N_steps: int,
         sigma: float,
         nsims: int,
@@ -18,22 +19,27 @@ def trainer(
         phi_str: str,
         df_x: pd.DataFrame,
 ):
-    model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(nsims)+ '.h5'
+    if TM is not None:
+        model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(TM) + '_' + str(nsims)+ '.h5'
+    else:
+        model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(nsims) + '.h5'
     # Fixed for now
-    epochs = 50
+    epochs = epochs
     # Batch execution with baby steps
     size_of_the_batch = 100
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
+    # TODO: Correct the 2 * T
+    future_T = TM if TM is not None else T
     lgm_single_step = LGM_model_one_step(n_steps = N_steps, 
                                      T = T, 
-                                     future_T = 2 * T,
+                                     future_T = future_T,
                                      verbose = False,
                                      sigma = sigma,
                                      batch_size = size_of_the_batch,
                                      phi = phi,
-                                     name = 'irs'
+                                     name = phi_str
     )
     try:
         lgm_single_step.load_weights(model_name)
@@ -52,19 +58,22 @@ def trainer(
     x = mc_paths_tranformed.astype(np.float64)
     delta_x = df_x._delta_x.values.astype(np.float64)
     # Custom iteration: 
-    for epoch in range(epochs):
+    epoch = 0
+    loss = np.infty
+    while loss > 0.00001 and epoch < epochs:
         print(f'{epoch}...', end = '')
         for batch in range(batches):
             start_time = time.time()
             x_batch = x[batch * batch_size: (batch + 1) * batch_size, :]
             delta_x_batch = delta_x[batch * batch_size: (batch + 1) * batch_size]
-            lgm_single_step.custom_train_step(
+            _, loss, _, _ = lgm_single_step.custom_train_step(
                 X = x_batch,
                 batch = batch,
                 epoch = epoch, 
                 start_time = start_time,
                 delta_x = delta_x_batch
             )
+        epoch += 1
     # Save the model
     lgm_single_step.save_weights(model_name)
         
