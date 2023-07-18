@@ -21,6 +21,10 @@ from utils.tester.tester import (
 
 from trainer.trainer import trainer
 
+import wandb
+from wandb.keras import WandbCallback
+
+
 # Exception (TODO: Move to a custom file)
 class ArgumentFailure(Exception):
     def __init__(self, mensaje):
@@ -37,8 +41,12 @@ def parse_args():
     parser.add_argument("--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
     parser.add_argument("--nsims", type=int, help="Number of simulations (default 1000)", default=1000)
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
-    parser.add_argument("--nsteps", type=float, help="Number of steps for each path (default 100)", default=100)
+    parser.add_argument("--nsteps", type=int, help="Number of steps for each year path (default 100)", default=50)
     parser.add_argument("--test", type=bool, help="Test", default = True)
+    # Trainer 
+    parser.add_argument("--nepochs", type=int, help="Number of epochs (default 100)", default=100)
+    # Wandb Tracker
+    parser.add_argument("--wandb", type=bool, help="Wandb", default = False)
     args = parser.parse_args()
     
     if args.TM is None and args.phi != 'zerobond':
@@ -68,11 +76,19 @@ def get_phi_test(active):
     
 if __name__ == '__main__':
     args = parse_args()
+    # Wandb integration
+    if args.wandb:
+        wandb.login()
+    
+    # Phi function
+    phi = get_phi(args.phi)
+    if phi is None:
+        raise ArgumentFailure(f'{args.phi} is not a valid phi function')
     # Configs
     T, TM, N_steps, X0, sigma = (
         args.T, 
         args.TM,
-        args.nsteps,
+        args.nsteps * args.T,
         0, 
         args.sigma
     )
@@ -80,6 +96,7 @@ if __name__ == '__main__':
     print(f'Simulations:')
     print(f'\tNsims: {nsims}')
     print(f'\tT: {T}')
+    print(f'\tTM: {TM}')
     print(f'\tN_steps: {N_steps}')
     print(f'\tX0: {X0}')
     print(f'\tSigma: {sigma}')
@@ -106,8 +123,11 @@ if __name__ == '__main__':
     # Get the environment
     phi = get_phi(phi_str)
     print(f"Training: {phi_str}")
+    # Epochs
+    epochs = args.nepochs
     # Train the model
     model = trainer(
+        epochs=epochs,
         T = T,
         TM = TM,
         N_steps = N_steps,
@@ -115,12 +135,15 @@ if __name__ == '__main__':
         nsims = nsims,
         phi = phi,
         phi_str = phi_str,
-        df_x = df_x
+        df_x = df_x,
+        report_to_wandb = args.wandb
     )
     # Test
     if args.test:
         # TODO: Remove from here
-        test_name_file = 'data/export/' + phi_str + '_test_results_' + str(T) + '_' + str(nsims)+ '.csv'
+        test_name_file = 'data/export/test/' + phi_str + '_test_results_' + str(T) + '_' + str(nsims)+ '_' + str(N_steps)+ '.csv'
+        # TODO: Remove from here
+        train_name_file = 'data/export/train/' + phi_str + '_train_results_' + str(T) + '_' + str(nsims)+ '_' + str(N_steps)+ '.csv'
         test_sims = int(nsims * 0.2)
         mcsimulator = MCSimulation(
             T = T,  
@@ -150,6 +173,19 @@ if __name__ == '__main__':
             test_name_file = test_name_file,
             # TODO: Deprecate this
             sigma_value = sigma,
-            TM = args.TM,
-            T = T
+            TM = TM,
+            T = T,
+            report_to_wandb = args.wandb
+        )
+        # Sanity training
+        # Data used as features
+        tester.test(
+            df = df_x,
+            model = model,
+            test_name_file = train_name_file,
+            # TODO: Deprecate this
+            sigma_value = sigma,
+            TM = TM,
+            T = T,
+            report_to_wandb = args.wandb
         )

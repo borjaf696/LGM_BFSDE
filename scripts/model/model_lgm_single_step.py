@@ -1,3 +1,6 @@
+# Sys
+import sys
+import os
 # Load configuration
 import json
 # Imports
@@ -7,10 +10,17 @@ import numpy as np
 from tensorflow.keras import layers
 from tensorflow import keras
 # Utils
-from utils.utils.utils import FinanceUtils
+from utils.utils.utils import (
+    FinanceUtils,
+    MLUtils
+)
 # Losses
 from losses.losses import Losses
-# TODO: Write better method definitions
+
+# Wandb integration
+import wandb
+from wandb.keras import WandbCallback
+
 class LGM_model_one_step(tf.keras.Model):
 
     def __init__(
@@ -24,6 +34,8 @@ class LGM_model_one_step(tf.keras.Model):
         batch_size = None,
         phi = None,
         future_T = None,
+        report_to_wandb = False,
+        data = None,
         **kwargs
     ):
         """_summary_
@@ -43,6 +55,10 @@ class LGM_model_one_step(tf.keras.Model):
         self.T = np.float64(T)
         # Same for actives with out future
         self.future_T = future_T
+        # Constantes:
+        print(f'Strike time (T): {T}')
+        print(f'Second strike time (TM): {self.future_T}')
+        print(f'Number of steps per path: {n_steps}')
         self._batch_size = batch_size
         self._expected_sample_size = self.N * self._batch_size
         # Phi function
@@ -50,9 +66,14 @@ class LGM_model_one_step(tf.keras.Model):
         # Type of active
         self.__name = name
         # Model with time and value
-        input_tmp = keras.Input(shape = (2, ), 
-                                name = name)
-        initializer = tf.keras.initializers.GlorotUniform(seed = 6543210)
+        input_tmp = keras.Input(
+            shape = (2, ), 
+            name = self.__name
+        )
+        # Normalization layer
+        normalizer = tf.keras.layers.experimental.preprocessing.Normalization()
+        normalizer.adapt(data)
+        x = normalizer(input_tmp)
         # Configuration read from:
         # --- name
         # --- T, strike time
@@ -62,16 +83,35 @@ class LGM_model_one_step(tf.keras.Model):
         self.__num_layers = configuration['layers']
         print(f'Number of layers: {self.__num_layers}')
         print(f'Number of hidden units: {configuration["hidden_units"]}')
+        # Build dense layers
+        self.__dense_layers = []
         for i in range(self.__num_layers):
-            objective_layer = x if i >0 else input_tmp
-            x = layers.Dense(units = configuration['hidden_units'],
+            self.__dense_layers.append(
+                tf.keras.layers.Dense(
+                    units = configuration['hidden_units'],
                     activation = 'relu',
-                    kernel_initializer = initializer,
-                    name = 'internal_relu_dense_'+str(i))(objective_layer)
+                    kernel_initializer = tf.keras.initializers.GlorotUniform(),
+                    kernel_regularizer=tf.keras.regularizers.l2(0.01),
+                    name = 'internal_relu_dense_'+str(i)
+                )
+            )
+        # Adding skip connections
+        for i in range(0, self.__num_layers - 1, 1):
+            objective_layer = x
+            # Layer skip
+            x = self.__dense_layers[i](objective_layer)
+            x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.Dropout(0.1)(x)
+            '''# Layer to skip
+            x2 = self.__dense_layers[i+1](x1)
+            x2 = tf.keras.layers.BatchNormalization()(x2)
+            x2 = tf.keras.layers.Dropout(0.5)(x2)
+            # Skip connection
+            x = tf.keras.layers.Add()([x1, x2])'''
         output_tmp = layers.Dense(
-            units = 1,  
-            kernel_initializer = initializer,
-            name = 'output_relu_dense')(x)
+            units = 1, 
+            kernel_initializer = tf.keras.initializers.GlorotUniform(),
+            name = 'output_dense')(x)
         self._custom_model = keras.Model(
             inputs = input_tmp,
             outputs = output_tmp,
@@ -88,8 +128,7 @@ class LGM_model_one_step(tf.keras.Model):
         self._loss_tracker_t3_array = []
         # Duration each step
         self._deltaT = T / self.N
-        # Constantes:
-        print(f'T: {T}')
+        # CT
         self._ct = FinanceUtils.C(T, sigma_value = sigma)
         # Status variables
         self._grads, self._predictions = None, None
@@ -97,6 +136,8 @@ class LGM_model_one_step(tf.keras.Model):
         self.__create_masks()
         # Verbose
         self._verbose = verbose
+        # Track with wandb
+        self.__wandb = report_to_wandb
         
     def __create_masks(self):
         # Create masks
@@ -113,6 +154,7 @@ class LGM_model_one_step(tf.keras.Model):
         )
         print(f'Positions to avoid from V {self._expected_sample_size - np.sum(self._mask_v)}')
         print(f'Positions to complete from V {np.sum(self._mask_preds)}')
+        
         # Loss mask
         idx_preds = np.array(range(0, self._expected_sample_size, self.N))[1:] - 1
         mask_loss = np.ones((self._expected_sample_size, 1)) 
@@ -197,7 +239,10 @@ class LGM_model_one_step(tf.keras.Model):
         if optimizer == 'adam':
             print(f'Optimizer set to {optimizer}')
             self._optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-    
+            
+    def learning_rate(self, learning_rate):
+        self._optimizer.learning_rate.assign(learning_rate)
+        
     def custom_train_step(self, X, y = None, batch = 0, epoch = 0, start_time = None, delta_x = None):
         """_summary_
 
@@ -216,7 +261,7 @@ class LGM_model_one_step(tf.keras.Model):
             v, predictions = self.predict(x, delta_x = delta_x)
             v = tf.reshape(v, (batch_size, self.N))
             predictions = tf.reshape(predictions, (batch_size, self.N))
-            loss, losses_tracker = Losses.loss_lgm(x = x, 
+            loss, losses_tracker, analytical_grads, difference_strike = Losses.loss_lgm(x = x, 
                                  v = v,
                                  ct = self._ct,
                                  derivatives = self._get_dv_dxi(self.N - 1),  
@@ -224,7 +269,7 @@ class LGM_model_one_step(tf.keras.Model):
                                  N_steps = self.N,
                                  verbose = self._verbose,
                                  T = self.T,
-                                 TN = self.future_T,
+                                 TM = self.future_T,
                                  phi = self.__phi,
                                  mask_loss = self._mask_loss)
         grads = tape.gradient(loss, self.model.trainable_weights)
@@ -243,11 +288,34 @@ class LGM_model_one_step(tf.keras.Model):
                 import time
                 print(f'Epoch {epoch} Batch {batch} Mean loss {self.loss_tracker.result()} Time per epoch: {(time.time() - start_time) / (epoch + 1)}s')
                 print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
+                # print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
                 self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
                 self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
-                self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())         
+                self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())  
+            if self.__wandb:
+                wandb.log(
+                    {
+                        'lr': self._optimizer.learning_rate.numpy(),
+                        'epochs': epoch,
+                        'strike_loss': self._loss_tracker_t1.result(),
+                        'derivative_loss': self._loss_tracker_t2.result(),
+                        'steps_error_loss': self._loss_tracker_t3.result(),
+                        'overall_loss': self.loss_tracker.result(),
+                        'grads_magnitude': tf.reduce_mean(self._grads),
+                        'analytical_grads': tf.reduce_mean(analytical_grads),
+                        'difference_strike': tf.reduce_mean(difference_strike),
+                    }
+                )  
         # Store losses
         return float(self.loss_tracker.result()), float(self._loss_tracker_t1.result()), float(self._loss_tracker_t2.result()), float(self._loss_tracker_t3.result())
+    
+    def reset_trackers(self):
+        # Reset trackers
+        self._loss_tracker_t1.reset_states()
+        self._loss_tracker_t2.reset_states()
+        self._loss_tracker_t3.reset_states()
+        self.loss_tracker.reset_states()
+    
     
     def get_losses_internal(self):
         """_summary_
@@ -363,6 +431,20 @@ class LGM_model_one_step(tf.keras.Model):
                 delta_x
             )
         )
+        # Sanity
+        '''grads_reshaped = tf.reshape(grads, (self._batch_size, self.N))
+        predictions_reshaped = tf.reshape(predictions, (self._batch_size, self.N))
+        delta_x_reshaped = tf.reshape(delta_x, (self._batch_size, self.N))
+        v_sanity = np.zeros((self._batch_size, self.N))
+        v_sanity[:, 0] = predictions_reshaped[:, 0]
+        for i in range(1, self.N):
+            v_sanity[:, i] = predictions_reshaped[:, i - 1] + grads_reshaped[:, i - 1] * delta_x_reshaped[:, i]
+        v_sanity = tf.convert_to_tensor(
+            np.reshape(
+                v_sanity, 
+                (self._batch_size * self.N, 1)
+            )   
+        )'''
         '''print(f'{v.shape}, {predictions_rolled.shape}, {grads_rolled.shape}')
         print(f'{self._mask_v.shape}, {self._mask_preds.shape}')'''
         if not build_masks:
@@ -392,10 +474,13 @@ class LGM_model_one_step(tf.keras.Model):
                 mask_preds
             )
         )
-        '''print(f'V: {v[0]}\nPredictions: {predictions[0]}')
-        print(f'V: {v[1]}\nPredictions: {predictions[1]}')
-        print(f'Grads: {grads[1]}\n')
-        sys.exit()'''
+        '''error = tf.math.reduce_sum(
+            tf.math.subtract(
+                v_sanity,
+                v
+            )
+        )'''
+        # print(f'Error: {error}')
         return v, predictions
     
     # Save model 

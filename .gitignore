@@ -174,3 +174,9 @@ notebooks/logs/20230217/grads_fx.log
 
 # Avoid pdf
 *.pdf
+
+# Wandb logs
+*wandb-metadata.json
+*wandb-summary.json
+*.wandb
+wandb/*

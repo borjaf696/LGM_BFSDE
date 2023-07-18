@@ -10,13 +10,23 @@ Install the environment. The next step will build a folder ***.venv*** which sto
 
 <pre><code> hatch run python</code></pre>
 
-#### Launcher:
+#### Launcher
 
 To launch the code:
 
 - `parámetro1`:
 - `parámetro2`:
 - `parámetro3`:
+
+### Weights and Biases (Wandb) Integration
+
+To run the experiments we have used "wandb". To install it simply run:
+
+```
+hatch run pip install wandb
+```
+
+In the code there is an entry `wand.login()` which will ask you to login in into wandb but just the first time you use it.
 
 ## Todo:
 

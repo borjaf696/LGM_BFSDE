@@ -15,6 +15,32 @@ TIMES = {
     12:1.0
 }
 
+# Cyclic learning rate with decay
+class CyclicLR(tf.keras.optimizers.schedules.LearningRateSchedule):
+    def __init__(self, base_lr, max_lr, step_size, decay=1., mode='triangular'):
+        super().__init__()
+
+        self.base_lr = base_lr
+        self.max_lr = max_lr
+        self.step_size = step_size
+        self.decay = decay
+        self.mode = mode
+
+        self.clr_iterations = 0.
+
+    def __call__(self, step):
+        cycle = np.floor(1 + self.clr_iterations / (2 * self.step_size))
+        x = np.abs(self.clr_iterations / self.step_size - 2 * cycle + 1)
+
+        if self.mode == 'triangular':
+            lr = self.base_lr + (self.max_lr - self.base_lr) * np.maximum(0, (1 - x))
+        else:
+            raise NotImplementedError("mode '{}' is not implemented".format(self.mode))
+
+        self.clr_iterations += 1
+        # Apply decay
+        return lr * (self.decay ** (self.clr_iterations / self.step_size))
+
 class MathUtils():
     
     @staticmethod
@@ -115,6 +141,10 @@ class MLUtils():
             
             X[cols_renamed] = (X[cols_to_transform] - self.__mean) / (self.__std)
             return X
+        
+    @tf.function
+    def sin_activation(x):
+        return tf.math.sin(x)
     
     @staticmethod
     def get_pipeline(transformations = None):
@@ -264,6 +294,17 @@ class ZeroBond():
         """
         assert ct is not None
         return ZeroBond.D(T) * np.exp(-0.5 * ZeroBond.H(T)**2 * ct - ZeroBond.H(T)*xt) * ZeroBond.N(t, xt, ct)
+    @staticmethod
+    def Z_norm(xn, tn, T, ct):
+        """_summary_
+        Args:
+            xn (_type_): _description_
+            n (_type_): _description_
+            ct (_type_): _description_
+        Returns:
+            _type_: _description_
+        """
+        return  ZeroBond.Z(xn, tn, T, ct)/ZeroBond.N(tn, xn, ct)
     @staticmethod
     def exponent(xt, t, T, ct = None):
         """_summary_
