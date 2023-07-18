@@ -18,12 +18,12 @@ class Losses():
                  N_steps: np.int64, 
                  verbose: bool = False,
                  T: int = None,
-                 TN: int = None,
+                 TM: int = None,
                  phi: Any = None,
                  mask_loss: tf.Tensor = None):
         
         # print(f'Predictions:{predictions[0,:]}, V: {v[0, :]}')
-        betas = [1, 1, 1]
+        betas = [0.02, 0.02, 1]
         # Tiles
         tile_multiples = tf.constant([1, N_steps], tf.int64)
         samples, _ = x.shape
@@ -33,17 +33,19 @@ class Losses():
         xn_tensor = x_reformat[:, -1]
         # Loss given the strike function
         tn = np.float64(T)
-        T = np.float64(TN)
+        TM = np.float64(TM)
         strike_loss = tf.reshape(
-            tf.math.squared_difference(predictions[:, -1], 
-                                       phi(
-                                           xn_tensor, 
-                                           tn,
-                                           T,
-                                           ct)
-                                        ), 
+            tf.math.squared_difference(
+                predictions[:, -1], 
+                phi(
+                    xn_tensor, 
+                    tn,
+                    TM,
+                    ct)
+                ), 
             (batch_size,1)
         )
+        
         # Repeat the tensor to adapt dimensions
         strike_loss = tf.tile(
             strike_loss,
@@ -91,9 +93,13 @@ class Losses():
             [1, N_steps]
         )
         derivative_loss_reshaped = tf.reshape(derivative_loss, [-1])
+        # TODO: Check if this is correct
         # Epoch error per step
         error_per_step = tf.cumsum(
-            tf.math.squared_difference(v, predictions), axis = 1) / N_steps
+            tf.math.squared_difference(
+                v, 
+                predictions
+            ), axis = 1) / (N_steps)
         # Flatten the cumsum
         error_per_step = tf.reshape(error_per_step, [-1])
         # Record internal losses
@@ -114,6 +120,15 @@ class Losses():
                 derivative_loss_reshaped
             )
         )
-        
+        '''loss_per_sample = tf.math.add(
+            error_per_step, 
+            strike_loss_reshaped
+        )'''
+        # Sanity purposes
+        difference_strike = tf.math.reduce_mean(
+            tf.math.abs(
+                v[:, -1] - phi(xn_tensor,tn,TM,ct)
+            )
+        )
         # Apply mask to only change given the last step
-        return tf.math.multiply(loss_per_sample,mask_loss), losses_trackers
+        return tf.math.multiply(loss_per_sample,mask_loss), losses_trackers, df_dxn, difference_strike

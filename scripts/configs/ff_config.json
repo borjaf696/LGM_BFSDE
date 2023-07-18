@@ -8,12 +8,28 @@
             "layers": 8,
             "hidden_units": 16
         },
+        "3":{
+            "layers": 6,
+            "hidden_units": 16
+        },
         "4":{
-            "layers": 24,
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "5":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "6":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "7":{
+            "layers": 6,
             "hidden_units": 16
         },
         "8":{
-            "layers": 24,
+            "layers": 6,
             "hidden_units": 16
         }
     },
@@ -23,11 +39,27 @@
             "hidden_units": 16
         },
         "2":{
-            "layers": 6,
+            "layers": 8,
+            "hidden_units": 16
+        },
+        "3":{
+            "layers": 10,
             "hidden_units": 16
         },
         "4":{
-            "layers": 24,
+            "layers": 12,
+            "hidden_units": 16
+        },
+        "5":{
+            "layers": 14,
+            "hidden_units": 16
+        },
+        "6":{
+            "layers": 16,
+            "hidden_units": 16
+        },
+        "7":{
+            "layers": 18,
             "hidden_units": 16
         },
         "8":{
@@ -41,11 +73,27 @@
             "hidden_units": 16
         },
         "2":{
-            "layers": 6,
+            "layers": 8,
+            "hidden_units": 16
+        },
+        "3":{
+            "layers": 10,
             "hidden_units": 16
         },
         "4":{
-            "layers": 24,
+            "layers": 12,
+            "hidden_units": 16
+        },
+        "5":{
+            "layers": 14,
+            "hidden_units": 16
+        },
+        "6":{
+            "layers": 16,
+            "hidden_units": 16
+        },
+        "7":{
+            "layers": 18,
             "hidden_units": 16
         },
         "8":{
