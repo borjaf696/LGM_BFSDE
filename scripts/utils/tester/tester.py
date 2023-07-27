@@ -166,7 +166,7 @@ class SwaptionTester(Tester):
             sigma_value = sigma_value,
             predictions = df.lgm_single_step_V.values.astype(np.float64)
         )
-        df['V_normalized_001'] = df.apply(
+        '''df['V_normalized_001'] = df.apply(
             lambda x:
                 Swaption.Swaption_test(
                     0.01,
@@ -175,7 +175,7 @@ class SwaptionTester(Tester):
                     x.ct
                 ),
                 axis = 1
-        )
+        )'''
         
         folder = '/'.join(
             test_name_file.split('/')[:-1]

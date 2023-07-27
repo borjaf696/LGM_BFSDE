@@ -19,7 +19,7 @@ from losses.losses import Losses
 
 # Wandb integration
 import wandb
-from wandb.keras import WandbCallback
+from wandb.keras import WandbCallback    
 
 class LGM_model_one_step(tf.keras.Model):
 
@@ -35,6 +35,7 @@ class LGM_model_one_step(tf.keras.Model):
         phi = None,
         future_T = None,
         report_to_wandb = False,
+        # First simulation
         data = None,
         **kwargs
     ):
@@ -70,10 +71,8 @@ class LGM_model_one_step(tf.keras.Model):
             shape = (2, ), 
             name = self.__name
         )
-        # Normalization layer
-        normalizer = tf.keras.layers.experimental.preprocessing.Normalization()
-        normalizer.adapt(data)
-        x = normalizer(input_tmp)
+        # Batch normalization layer
+        x = tf.keras.layers.BatchNormalization()(input_tmp)
         # Configuration read from:
         # --- name
         # --- T, strike time
@@ -138,6 +137,10 @@ class LGM_model_one_step(tf.keras.Model):
         self._verbose = verbose
         # Track with wandb
         self.__wandb = report_to_wandb
+        
+    @property
+    def normalizer(self):
+        return self.normalization
         
     def __create_masks(self):
         # Create masks
@@ -301,6 +304,7 @@ class LGM_model_one_step(tf.keras.Model):
                         'derivative_loss': self._loss_tracker_t2.result(),
                         'steps_error_loss': self._loss_tracker_t3.result(),
                         'overall_loss': self.loss_tracker.result(),
+                        # Overall derivatives
                         'grads_magnitude': tf.reduce_mean(self._grads),
                         'analytical_grads': tf.reduce_mean(analytical_grads),
                         'difference_strike': tf.reduce_mean(difference_strike),
@@ -399,6 +403,18 @@ class LGM_model_one_step(tf.keras.Model):
         Returns:
             _type_: _description_
         """
+        # Normalization
+        t_normalized = tf.expand_dims(
+            X[:, 1] / self.T,
+            axis = 1
+        )
+        X = tf.concat(
+            [
+                X[:, 0:1], 
+                t_normalized
+            ], 
+            axis = 1
+        )
         # Predict
         predictions = self._custom_model(X)
         if debug:
