@@ -4,8 +4,10 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from utils.preprocess.preprocess import Preprocessor
+# Simulator
 from utils.simulator.simulator import MCSimulation
+from utils.preprocess.preprocess import Preprocessor
+
 from utils.utils.utils import (
     ZeroBond,
     IRS,
@@ -100,22 +102,7 @@ if __name__ == '__main__':
     print(f'\tN_steps: {N_steps}')
     print(f'\tX0: {X0}')
     print(f'\tSigma: {sigma}')
-    mcsimulator = MCSimulation(
-        T = T, 
-        N = N_steps, 
-        X0 = X0, 
-        sigma = sigma
-    )
-    # Training paths
-    mc_paths, W = mcsimulator.simulate(nsims)
-    mc_paths_transpose = mc_paths.T
-    df_x = Preprocessor.preprocess_paths(
-        T,
-        N_steps,
-        mc_paths_transpose,
-        nsims
-    )
-    print(f'Features shape: {df_x.shape}')
+
     # tf model training
     phi_str = args.phi
     # Imprime los valores de los argumentos
@@ -135,7 +122,6 @@ if __name__ == '__main__':
         nsims = nsims,
         phi = phi,
         phi_str = phi_str,
-        df_x = df_x,
         report_to_wandb = args.wandb
     )
     # Test
@@ -171,18 +157,6 @@ if __name__ == '__main__':
             df = df_x_test,
             model = model,
             test_name_file = test_name_file,
-            # TODO: Deprecate this
-            sigma_value = sigma,
-            TM = TM,
-            T = T,
-            report_to_wandb = args.wandb
-        )
-        # Sanity training
-        # Data used as features
-        tester.test(
-            df = df_x,
-            model = model,
-            test_name_file = train_name_file,
             # TODO: Deprecate this
             sigma_value = sigma,
             TM = TM,

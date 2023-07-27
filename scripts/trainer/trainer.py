@@ -1,5 +1,9 @@
 from typing import Any
+# LGM models
 from scripts.model.model_lgm_single_step import LGM_model_one_step
+# Simulator
+from utils.simulator.simulator import MCSimulation
+from utils.preprocess.preprocess import Preprocessor
 
 import numpy as np
 import pickle as pkl
@@ -11,6 +15,24 @@ import wandb
 from wandb.keras import WandbCallback
 
 from utils.utils.utils import CyclicLR
+
+def simulate(T, N_steps, sigma, nsims):
+    mcsimulator = MCSimulation(
+        T = T, 
+        N = N_steps, 
+        X0 = 0, 
+        sigma = sigma
+    )
+    # Training paths
+    mc_paths, W = mcsimulator.simulate(nsims)
+    mc_paths_transpose = mc_paths.T
+    df_x = Preprocessor.preprocess_paths(
+        T,
+        N_steps,
+        mc_paths_transpose,
+        nsims
+    )    
+    return df_x
 
 def trainer(
         epochs: int = 110,
@@ -24,7 +46,6 @@ def trainer(
         nsims: int,
         phi: Any,
         phi_str: str,
-        df_x: pd.DataFrame,
         report_to_wandb: bool = False,
         anneal_lr: bool = True
 ):
@@ -56,10 +77,6 @@ def trainer(
     size_of_the_batch = 100
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
-    # Data used as features
-    mc_paths_tranformed = df_x[['xt', 'dt']].values
-    x = mc_paths_tranformed.astype(np.float64)
-    delta_x = df_x._delta_x.values.astype(np.float64)
     # LGM model instance
     future_T = TM if TM is not None else T
     lgm_single_step = LGM_model_one_step(n_steps = N_steps, 
@@ -70,8 +87,7 @@ def trainer(
                                      batch_size = size_of_the_batch,
                                      phi = phi,
                                      name = phi_str,
-                                     report_to_wandb=report_to_wandb,
-                                     data = x
+                                     report_to_wandb=report_to_wandb
     )
     lgm_single_step.export_model_architecture()
     try:
@@ -95,6 +111,11 @@ def trainer(
     epoch = 0
     loss = np.infty
     while loss > 0.00001 and epoch < epochs:
+        df_x = simulate(T, N_steps, sigma, nsims)
+        # Data used as features
+        mc_paths_tranformed = df_x[['xt', 'dt']].values
+        x = mc_paths_tranformed.astype(np.float64)
+        delta_x = df_x._delta_x.values.astype(np.float64)
         print(f'{epoch}...', end = '')
         for batch in range(batches):
             start_time = time.time()
