@@ -81,6 +81,8 @@ def trainer(
     future_T = TM if TM is not None else T
     # Initial simulation to adapt normalization
     df_x_0 = simulate(T, N_steps, sigma, nsims)
+    mc_paths_tranformed_x0 = df_x_0[['xt', 'dt']].values
+    x0 = mc_paths_tranformed_x0.astype(np.float64)
     lgm_single_step = LGM_model_one_step(n_steps = N_steps, 
                                      T = T, 
                                      future_T = future_T,
@@ -89,7 +91,8 @@ def trainer(
                                      batch_size = size_of_the_batch,
                                      phi = phi,
                                      name = phi_str,
-                                     report_to_wandb=report_to_wandb
+                                     report_to_wandb=report_to_wandb,
+                                     data_sample=x0
     )
     lgm_single_step.export_model_architecture()
     try:

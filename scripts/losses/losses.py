@@ -131,4 +131,6 @@ class Losses():
             )
         )
         # Apply mask to only change given the last step
-        return tf.math.multiply(loss_per_sample,mask_loss), losses_trackers, df_dxn, difference_strike
+        if mask_loss is not None:
+            loss_per_sample = tf.math.multiply(loss_per_sample, mask_loss)
+        return loss_per_sample, losses_trackers, df_dxn, difference_strike

@@ -97,7 +97,7 @@ class LGM_model_one_step(tf.keras.Model):
                     units = configuration['hidden_units'],
                     kernel_initializer = tf.keras.initializers.GlorotUniform(),
                     kernel_regularizer=tf.keras.regularizers.l2(0.01),
-                    name = 'internal_relu_dense_'+str(i)
+                    name = 'internal_dense_'+str(i)
                 )
             )
         # Adding skip connections
@@ -145,10 +145,6 @@ class LGM_model_one_step(tf.keras.Model):
         # Track with wandb
         self.__wandb = report_to_wandb
         
-    @property
-    def normalizer(self):
-        return self.normalization
-        
     def __create_masks(self):
         # Create masks
         idx_preds = np.array(range(0, self._expected_sample_size, self.N))
@@ -166,8 +162,9 @@ class LGM_model_one_step(tf.keras.Model):
         print(f'Positions to complete from V {np.sum(self._mask_preds)}')
         
         # Loss mask
-        idx_preds = np.array(range(0, self._expected_sample_size, self.N))[1:] - 1
-        mask_loss = np.ones((self._expected_sample_size, 1)) 
+        print(f'Loss mask: {self._expected_sample_size / self.N}')
+        idx_preds = np.array(range(0, self._expected_sample_size + 1, self.N))[1:] - 1
+        mask_loss = np.zeros((self._expected_sample_size, 1)) 
         mask_loss[idx_preds] = 1.0
         self._mask_loss = tf.reshape(
             tf.convert_to_tensor(
@@ -176,6 +173,8 @@ class LGM_model_one_step(tf.keras.Model):
             ),
             (self._expected_sample_size, 1)
         )
+        print(f'Positions to avoid from loss {self._expected_sample_size - np.sum(self._mask_loss)}')
+        print(f'Positions to complete from loss {np.sum(self._mask_loss)}')
     
     @property
     def model(self):
