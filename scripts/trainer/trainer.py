@@ -79,6 +79,8 @@ def trainer(
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
     future_T = TM if TM is not None else T
+    # Initial simulation to adapt normalization
+    df_x_0 = simulate(T, N_steps, sigma, nsims)
     lgm_single_step = LGM_model_one_step(n_steps = N_steps, 
                                      T = T, 
                                      future_T = future_T,

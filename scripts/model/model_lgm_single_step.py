@@ -7,6 +7,7 @@ import json
 import tensorflow as tf
 import numpy as np
 # From
+from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import layers
 from tensorflow import keras
 # Utils
@@ -35,8 +36,8 @@ class LGM_model_one_step(tf.keras.Model):
         phi = None,
         future_T = None,
         report_to_wandb = False,
-        # First simulation
-        data = None,
+        # First simulation
+        data_sample = None,
         **kwargs
     ):
         """_summary_
@@ -71,8 +72,14 @@ class LGM_model_one_step(tf.keras.Model):
             shape = (2, ), 
             name = self.__name
         )
-        # Batch normalization layer
-        x = tf.keras.layers.BatchNormalization()(input_tmp)
+        # Normalizer
+        normalizer = preprocessing.Normalization()
+        normalizer.adapt(
+            data_sample
+        )
+        x = normalizer(
+            input_tmp
+        )
         # Configuration read from:
         # --- name
         # --- T, strike time
@@ -88,7 +95,6 @@ class LGM_model_one_step(tf.keras.Model):
             self.__dense_layers.append(
                 tf.keras.layers.Dense(
                     units = configuration['hidden_units'],
-                    activation = 'relu',
                     kernel_initializer = tf.keras.initializers.GlorotUniform(),
                     kernel_regularizer=tf.keras.regularizers.l2(0.01),
                     name = 'internal_relu_dense_'+str(i)
@@ -100,6 +106,7 @@ class LGM_model_one_step(tf.keras.Model):
             # Layer skip
             x = self.__dense_layers[i](objective_layer)
             x = tf.keras.layers.BatchNormalization()(x)
+            x = tf.keras.layers.ReLU()(x)
             x = tf.keras.layers.Dropout(0.1)(x)
             '''# Layer to skip
             x2 = self.__dense_layers[i+1](x1)

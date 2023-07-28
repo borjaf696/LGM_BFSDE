@@ -1,73 +1,22 @@
+[tool.poetry]
+name = "my_project"
+version = "0.1.0"
+description = ""
+authors = ["Borja borjaf696@gmail.com"]
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.11"
+pandas = ">=1.1.5"
+scipy = ">=1.11.1"
+seaborn = ">=0.12.2"
+scikit-learn = ">=1.3.0"
+tensorflow = ">=2.11.0"
+pydot = ">=1.4.2"
+wandb = ">=0.15.7"
+
+[tool.poetry.dev-dependencies]
+pytest = "^6.2.4"
+
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "lgm_bdse"
-description = 'Borja'
-readme = "README.md"
-requires-python = ">=3.8"
-keywords = []
-authors = [{ name = "Borja", email = "borjaf696@gmail.com" }]
-classifiers = [
-        "Development Status :: 4 - Beta",
-        "Programming Language :: Python",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: Implementation :: CPython",
-        "Programming Language :: Python :: Implementation :: PyPy",
-]
-dynamic = ["version"]
-
-dependencies = [
-        "pandas>=1.5.0",
-        "scipy>=1.9.1",
-        "seaborn>=0.12.1",
-        "scikit-learn>=1.1.3",
-        "tensorflow>=2.11.0",
-        "pydot>= 1.4.2" 
-]
-
-[tool.hatch.version]
-path = "lgm_bdse/__about__.py"
-
-[tool.hatch.envs.default]
-path = ".venv"
-dependencies = [
-        "jupyterlab>=3.4.8",
-        "black>=22.10.0",
-        "pytest",
-        "pytest-cov",
-        "isort>=5.10.1",
-        "jupyterlab-code-formatter>=1.5.3",
-        "python-dotenv>=0.21.0",
-        "matplotlib>=3.6.1",
-        "mypy>=0.991",
-        "pandas-stubs>=1.5.1.221024",
-        "yapf>=0.32.0",
-        "toml>=0.10.2",
-	"mkdocs",
-	"mkdocs-material",
-	"pillow",
-	"pygments",
-	"mkdocs-jupyter",
-	"cairosvg",
-	"mkautodoc",
-	"mkdocs-literate-nav",
-        "mkdocs-schema-reader"
-]
-[tool.hatch.envs.default.scripts]
-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=optim00 --cov=tests {args}"
-no-cov = "cov --no-cov {args}"
-
-[[tool.hatch.envs.test.matrix]]
-python = ["37", "38", "39"]
-
-[tool.coverage.run]
-branch = true
-parallel = true
-omit = ["optim00/__about__.py"]
-
-[tool.coverage.report]
-exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
