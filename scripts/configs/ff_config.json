@@ -2,35 +2,35 @@
     "zerobond":{
         "1":{
             "layers": 6,
-            "hidden_units": 16
+            "hidden_units": 8
         },
         "2":{
-            "layers": 8,
-            "hidden_units": 16
+            "layers": 6,
+            "hidden_units": 8
         },
         "3":{
             "layers": 6,
-            "hidden_units": 16
+            "hidden_units": 8
         },
         "4":{
             "layers": 6,
-            "hidden_units": 16
+            "hidden_units": 8
         },
         "5":{
             "layers": 6,
-            "hidden_units": 16
+            "hidden_units": 8
         },
         "6":{
             "layers": 6,
-            "hidden_units": 16
+            "hidden_units": 8
         },
         "7":{
             "layers": 6,
-            "hidden_units": 16
+            "hidden_units": 8
         },
         "8":{
             "layers": 6,
-            "hidden_units": 16
+            "hidden_units": 8
         }
     },
     "irs":{

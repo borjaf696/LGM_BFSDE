@@ -11,8 +11,7 @@ from utils.preprocess.preprocess import Preprocessor
 from utils.utils.utils import (
     ZeroBond,
     IRS,
-    Swaption,
-    FinanceUtils
+    Swaption
 )
 
 from utils.tester.tester import (
@@ -45,8 +44,12 @@ def parse_args():
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("--nsteps", type=int, help="Number of steps for each year path (default 100)", default=50)
     parser.add_argument("--test", type=bool, help="Test", default = True)
+    # Schema
+    parser.add_argument("--schema", type=int, help="Schema of the model", default = 1)
     # Trainer 
+    parser.add_argument("--normalize", type = bool, help = "Do normalization", default = False)
     parser.add_argument("--nepochs", type=int, help="Number of epochs (default 100)", default=100)
+    parser.add_argument("--save", type = bool, help="Save the model", default = False)
     # Wandb Tracker
     parser.add_argument("--wandb", type=bool, help="Wandb", default = False)
     args = parser.parse_args()
@@ -110,6 +113,11 @@ if __name__ == '__main__':
     # Get the environment
     phi = get_phi(phi_str)
     print(f"Training: {phi_str}")
+    # Normalize:
+    normalize = args.normalize
+    print(f"Normalize: {normalize}")
+    # Schema selected:
+    print(f'Schema: {args.schema}')
     # Epochs
     epochs = args.nepochs
     # Train the model
@@ -122,15 +130,18 @@ if __name__ == '__main__':
         nsims = nsims,
         phi = phi,
         phi_str = phi_str,
-        report_to_wandb = args.wandb
+        normalize = normalize,
+        report_to_wandb = args.wandb,
+        schema = args.schema, 
+        save_model = args.save
     )
     # Test
     if args.test:
         # TODO: Remove from here
-        test_name_file = 'data/export/test/' + phi_str + '_test_results_' + str(T) + '_' + str(nsims)+ '_' + str(N_steps)+ '.csv'
+        test_name_file = f'data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_{T}_{nsims}_{N_steps}.csv'
         # TODO: Remove from here
-        train_name_file = 'data/export/train/' + phi_str + '_train_results_' + str(T) + '_' + str(nsims)+ '_' + str(N_steps)+ '.csv'
-        test_sims = int(nsims * 0.2)
+        train_name_file = f'data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_{T}_{nsims}_{N_steps}.csv'
+        test_sims = int(nsims)
         mcsimulator = MCSimulation(
             T = T,  
             X0 = X0, 
@@ -148,6 +159,14 @@ if __name__ == '__main__':
             mc_paths_transpose_test,
             test_sims
         )
+        # W sanity
+        W_test_transpose = W_test.T.reshape(
+            (
+                test_sims * N_steps,
+                1
+            )
+        )
+        df_x_test['W'] = W_test_transpose
         print(f'Test Features shape: {df_x_test.shape}')
         print(f'Test columns: {df_x_test.columns}')
         tester = get_phi_test(phi_str)
