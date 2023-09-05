@@ -13,7 +13,6 @@ import numpy as np
 import pickle as pkl
 import pandas as pd
 import time 
-
 # Wandb integration
 import wandb
 from wandb.keras import WandbCallback
@@ -83,7 +82,7 @@ def trainer(
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
-    size_of_the_batch = 1000
+    size_of_the_batch = 500
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
@@ -144,7 +143,7 @@ def trainer(
     print(f'{lgm_single_step.summary()}')
     # Starting learning rate
     if anneal_lr:
-        lr = CyclicLR(base_lr=1e-3, max_lr=0.006, step_size=10, decay=0.99, mode='triangular')
+        lr = CyclicLR(base_lr=1e-3, max_lr=0.006, step_size=100, decay=0.99, mode='triangular')
     else:
         lr = 1e-3
     # Compile the model

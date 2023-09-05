@@ -22,6 +22,9 @@ class Losses():
         phi: Any = None,
         mask_loss: tf.Tensor = None
     ):
+        # Loss functions
+        L1 = tf.math.abs
+        L2 = tf.math.squared_difference
         # print(f'Predictions:{predictions[0,:]}, V: {v[0, :]}')
         betas = [1.0, 1.0, 1.0]
         # Tiles
@@ -39,18 +42,28 @@ class Losses():
         # Loss given the strike function
         tn = np.float64(T)
         TM = np.float64(TM)
+        real_values = phi(
+            xn_tensor, 
+            tn,
+            TM,
+            ct
+        )
+        diff = predictions[:, -1] - real_values
         strike_loss = tf.reshape(
-            tf.math.squared_difference(
-                predictions[:, -1], 
-                phi(
-                    xn_tensor, 
-                    tn,
-                    TM,
-                    ct
-                )
-            ), 
+            tf.where(
+                diff > 1,
+                L2(
+                    predictions[:, -1],
+                    real_values
+                ),
+                L1(diff) 
+            ),
             (batch_size,1)
         )
+        '''print(f'V: {v[:10, -1]}')
+        print(f'Predictions: {predictions[:10, -1]}')
+        print(f'Real values: {real_values[:10]}')
+        print(f'Errors: {tf.math.squared_difference(predictions[:10, -1], real_values[:10])}')'''
         # Repeat the tensor to adapt dimensions
         strike_loss = tf.tile(
             strike_loss,
@@ -93,11 +106,16 @@ class Losses():
                     f.write(f'{grad_i},')
                 f.write(f'\n')
         # Careful: global variable
+        diff = derivatives - df_dxn
         derivative_loss = tf.reshape(
-            tf.math.squared_difference(
-                derivatives,
-                df_dxn
-            ), 
+            tf.where(
+                diff > 1,
+                L2(
+                    derivatives,
+                    df_dxn
+                ),
+                L1(diff) 
+            ),
             (batch_size, 1)
         )
         # Repeat the tensor to adapt dimensions
@@ -111,11 +129,16 @@ class Losses():
         )
         # TODO: Check if this is correct
         # Epoch error per step
+        diff = v - predictions
         error_per_step = tf.cumsum(
-            tf.math.squared_difference(
-                v, 
-                predictions
-            ), axis = 1) / (N_steps)
+            tf.where(
+                diff > 1,
+                L2(
+                    v,
+                    predictions
+                ),
+                L1(diff) 
+            ),  axis = 1) / (N_steps)
         # Flatten the cumsum
         error_per_step = tf.reshape(
             error_per_step, 
@@ -152,8 +175,10 @@ class Losses():
         # Apply mask to only change given the last step
         if mask_loss is not None:
             loss_per_sample = tf.math.multiply(loss_per_sample, mask_loss)
-        import sys
-        idx_preds = np.array(range(0, strike_loss.shape[0], N_steps))
-        print(f'Loss per sample: {loss_per_sample.numpy[idx_preds]}')
-        sys.exit()
+        '''import sys
+        idx_preds = np.array(range(N_steps - 1, strike_loss_reshaped.shape[0], N_steps))
+        print(f'Loss per sample: {loss_per_sample.numpy()[idx_preds]}')
+        print(f'Idx preds: {idx_preds}')
+        print(f'Mean loss: {loss_per_sample.numpy()[idx_preds].mean()}')
+        sys.exit()'''
         return loss_per_sample, losses_trackers, df_dxn, difference_strike

@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument("--phi", type=str, help="Phi function to be used irs/swaption/zerobond (default zerobond)", default = 'zerobond')
     parser.add_argument("--TM", type = int, help = "Time to end Swap/IRS (default 8)", default = None)
     parser.add_argument("--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
-    parser.add_argument("--nsims", type=int, help="Number of simulations (default 1000)", default=1000)
+    parser.add_argument("--nsims", type=int, help="Number of simulations (default 500)", default=500)
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("--nsteps", type=int, help="Number of steps for each year path (default 100)", default=50)
     parser.add_argument("--test", type=bool, help="Test", default = True)
@@ -138,10 +138,10 @@ if __name__ == '__main__':
     # Test
     if args.test:
         # TODO: Remove from here
-        test_name_file = f'data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_{T}_{nsims}_{N_steps}.csv'
+        test_name_file = f'data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
         # TODO: Remove from here
-        train_name_file = f'data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_{T}_{nsims}_{N_steps}.csv'
-        test_sims = int(nsims)
+        train_name_file = f'data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
+        test_sims = int(nsims * 0.2)
         mcsimulator = MCSimulation(
             T = T,  
             X0 = X0, 

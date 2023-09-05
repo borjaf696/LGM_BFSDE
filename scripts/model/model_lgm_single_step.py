@@ -162,7 +162,7 @@ class LgmSingleStep(tf.keras.Model):
         
         # Loss mask
         print(f'Loss mask: {self._expected_sample_size / self.N}')
-        idx_preds = np.array(range(0, self._expected_sample_size + 1, self.N))[1:] - 1
+        idx_preds = np.array(range(self.N - 1, self._expected_sample_size + 1, self.N))
         mask_loss = np.zeros((self._expected_sample_size, 1)) 
         mask_loss[idx_preds] = 1.0
         self._mask_loss = tf.reshape(
@@ -246,7 +246,7 @@ class LgmSingleStep(tf.keras.Model):
             v, predictions = self.predict(x, delta_x = delta_x)
             v = tf.reshape(v, (batch_size, self.N))
             predictions = tf.reshape(predictions, (batch_size, self.N))
-            loss, losses_tracker, analytical_grads, difference_strike = loss(
+            loss_values, losses_tracker, analytical_grads, difference_strike = loss(
                 x = x, 
                 v = v,
                 ct = self._ct,
@@ -259,7 +259,7 @@ class LgmSingleStep(tf.keras.Model):
                 phi = self.__phi,
                 mask_loss = self._mask_loss
             )
-        grads = tape.gradient(loss, self.model.trainable_weights)
+        grads = tape.gradient(loss_values, self.model.trainable_weights)
         # print(f'Grads: {len(grads)}')
         self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
         # Losses tracker
@@ -267,7 +267,7 @@ class LgmSingleStep(tf.keras.Model):
         self._loss_tracker_t2.update_state(losses_tracker['t2'])
         self._loss_tracker_t3.update_state(losses_tracker['t3'])
         # Compute metrics
-        self.loss_tracker.update_state(loss)
+        self.loss_tracker.update_state(loss_values*self.N)
         if epoch % 10 == 0:
             if start_time is None:
                 print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
@@ -284,6 +284,7 @@ class LgmSingleStep(tf.keras.Model):
                     {
                         'lr': self._optimizer.learning_rate.numpy(),
                         'epochs': epoch,
+                        'batch:': batch,
                         'strike_loss': self._loss_tracker_t1.result(),
                         'derivative_loss': self._loss_tracker_t2.result(),
                         'steps_error_loss': self._loss_tracker_t3.result(),

@@ -95,6 +95,8 @@ class ZeroBondTester(Tester):
                 ),
                 axis = 1
         )
+        # Errors:
+        df['AbsErrors'] = np.abs(df.V_normalized - df.lgm_single_step_V)
         folder = '/'.join(
             test_name_file.split('/')[:-1]
         )

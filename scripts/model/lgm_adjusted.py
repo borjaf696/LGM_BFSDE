@@ -35,16 +35,15 @@ class LgmSingleStepModelAdjusted(LgmSingleStep):
             dtype=tf.float64
         )
         # Get the gradients
-        _, grads_x, _, grads_t = self._get_dv_dx(X)
+        _, grads_x, _, _ = self._get_dv_dx(X)
         # Reshapes
         grads_x_reshaped = tf.reshape(grads_x, (self._batch_size, self.N))
-        grads_t_reshaped = tf.reshape(grads_t, (self._batch_size, self.N))
         predictions_reshaped = tf.reshape(predictions, (self._batch_size, self.N))
         delta_x_reshaped = tf.reshape(delta_x, (self._batch_size, self.N))
         v = np.zeros((self._batch_size, self.N))
         v[:, 0] = predictions_reshaped[:, 0]
         for i in range(1, self.N):
-            v[:, i] = v[:, i - 1] + grads_x_reshaped[:, i - 1] * delta_x_reshaped[:, i] + grads_t_reshaped[:, i] * self._deltaT
+            v[:, i] = v[:, i - 1] + grads_x_reshaped[:, i - 1] * delta_x_reshaped[:, i]
         v = tf.convert_to_tensor(
             np.reshape(
                 v, 
