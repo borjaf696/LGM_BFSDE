@@ -180,3 +180,6 @@ notebooks/logs/20230217/grads_fx.log
 *wandb-summary.json
 *.wandb
 wandb/*
+
+# Avoid models
+*.h5

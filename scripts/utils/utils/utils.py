@@ -295,7 +295,7 @@ class ZeroBond():
         assert ct is not None
         return ZeroBond.D(T) * np.exp(-0.5 * ZeroBond.H(T)**2 * ct - ZeroBond.H(T)*xt) * ZeroBond.N(t, xt, ct)
     @staticmethod
-    def Z_norm(xn, tn, T, ct):
+    def Z_norm(xn, tn, T, ct = None):
         """_summary_
         Args:
             xn (_type_): _description_
@@ -304,6 +304,7 @@ class ZeroBond():
         Returns:
             _type_: _description_
         """
+        assert ct is not None
         return  ZeroBond.Z(xn, tn, T, ct)/ZeroBond.N(tn, xn, ct)
     @staticmethod
     def exponent(xt, t, T, ct = None):

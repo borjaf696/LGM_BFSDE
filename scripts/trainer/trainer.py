@@ -1,15 +1,18 @@
 from typing import Any
 # LGM models
-from scripts.model.model_lgm_single_step import LGM_model_one_step
+# TODO: Change this (factory)
+from scripts.model.lgm_adjusted import LgmSingleStepModelAdjusted
+from scripts.model.lgm_naive import LgmSingleStepNaive
+from scripts.model.lgm_naive_time_adjust import LgmSingleStepNaiveTimeAdjust
 # Simulator
 from utils.simulator.simulator import MCSimulation
 from utils.preprocess.preprocess import Preprocessor
-
+# Loss functions
+from scripts.losses.losses import Losses
 import numpy as np
 import pickle as pkl
 import pandas as pd
 import time 
-
 # Wandb integration
 import wandb
 from wandb.keras import WandbCallback
@@ -24,7 +27,7 @@ def simulate(T, N_steps, sigma, nsims):
         sigma = sigma
     )
     # Training paths
-    mc_paths, W = mcsimulator.simulate(nsims)
+    mc_paths, _ = mcsimulator.simulate(nsims)
     mc_paths_transpose = mc_paths.T
     df_x = Preprocessor.preprocess_paths(
         T,
@@ -46,13 +49,16 @@ def trainer(
         nsims: int,
         phi: Any,
         phi_str: str,
+        normalize: bool,
         report_to_wandb: bool = False,
-        anneal_lr: bool = True
+        anneal_lr: bool = True,
+        schema: int = 1,
+        save_model: bool = False
 ):
-    if wandb:
+    if report_to_wandb:
         wandb.init(
             project="lgm",
-            name = f'{phi_str}_{T}_{TM}_{epochs}_{size_of_the_batch}_{nsims}_{N_steps}_{architecture}',
+            name = f'schema_{schema}_normalize_{normalize}_{phi_str}_{T}_{TM}_{epochs}_{size_of_the_batch}_{nsims}_{N_steps}_{architecture}',
             config={
                 "epochs": epochs,
                 "size_of_the_batch": size_of_the_batch,
@@ -64,31 +70,69 @@ def trainer(
                 "phi": phi,
                 "phi_str": phi_str,
                 "architecture": architecture,
+                "schema": schema,
+                "normalize": normalize,
                 "log_step": 10
             }
         )
     if TM is not None:
-        model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(TM) + '_' + str(nsims) + '_' + str(N_steps)+ '.h5'
+        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}.h5'
     else:
-        model_name = 'models_store/' + phi_str + '_model_lgm_single_step' + str(T) + '_' + str(nsims)+ '_' + str(N_steps) + '.h5'
+        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_normalize{normalize}_step_{T}_{nsims}_{N_steps}.h5'
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
-    size_of_the_batch = 100
+    size_of_the_batch = 500
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
     future_T = TM if TM is not None else T
-    lgm_single_step = LGM_model_one_step(n_steps = N_steps, 
-                                     T = T, 
-                                     future_T = future_T,
-                                     verbose = False,
-                                     sigma = sigma,
-                                     batch_size = size_of_the_batch,
-                                     phi = phi,
-                                     name = phi_str,
-                                     report_to_wandb=report_to_wandb
-    )
+    # Initial simulation to adapt normalization
+    df_x_0 = simulate(T, N_steps, sigma, nsims*10)
+    mc_paths_tranformed_x0 = df_x_0[['xt', 'dt']].values
+    x0 = mc_paths_tranformed_x0.astype(np.float64)
+    if schema == 1:
+        lgm_single_step = LgmSingleStepNaive(
+            n_steps = N_steps, 
+            T = T, 
+            future_T = future_T,
+            verbose = False,
+            sigma = sigma,
+            batch_size = size_of_the_batch,
+            phi = phi,
+            name = phi_str,
+            report_to_wandb=report_to_wandb,
+            normalize=normalize,
+            data_sample=x0
+        )
+    elif schema == 2:
+        lgm_single_step = LgmSingleStepModelAdjusted(
+            n_steps = N_steps, 
+            T = T, 
+            future_T = future_T,
+            verbose = False,
+            sigma = sigma,
+            batch_size = size_of_the_batch,
+            phi = phi,
+            name = phi_str,
+            report_to_wandb=report_to_wandb,
+            normalize=normalize,
+            data_sample=x0
+        )
+    elif schema == 3:
+        lgm_single_step = LgmSingleStepNaiveTimeAdjust(
+            n_steps = N_steps, 
+            T = T, 
+            future_T = future_T,
+            verbose = False,
+            sigma = sigma,
+            batch_size = size_of_the_batch,
+            phi = phi,
+            name = phi_str,
+            report_to_wandb=report_to_wandb,
+            normalize=normalize,
+            data_sample=x0
+        )
     lgm_single_step.export_model_architecture()
     try:
         lgm_single_step.load_weights(model_name)
@@ -99,7 +143,7 @@ def trainer(
     print(f'{lgm_single_step.summary()}')
     # Starting learning rate
     if anneal_lr:
-        lr = CyclicLR(base_lr=1e-3, max_lr=0.006, step_size=10, decay=0.99, mode='triangular')
+        lr = CyclicLR(base_lr=1e-3, max_lr=0.006, step_size=100, decay=0.99, mode='triangular')
     else:
         lr = 1e-3
     # Compile the model
@@ -126,7 +170,8 @@ def trainer(
                 batch = batch,
                 epoch = epoch, 
                 start_time = start_time,
-                delta_x = delta_x_batch
+                delta_x = delta_x_batch,
+                loss = Losses.loss_lgm
             )
         epoch += 1
         # Reset error trackers
@@ -134,6 +179,7 @@ def trainer(
     # Explanation cut training
     print(f'Finishing training with {epoch} epochs and loss {loss:.4f}')
     # Save the model
-    lgm_single_step.save_weights(model_name)
+    if save_model:
+        lgm_single_step.save_weights(model_name)
         
     return lgm_single_step
