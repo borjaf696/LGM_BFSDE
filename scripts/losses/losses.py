@@ -4,10 +4,50 @@ import numpy as np
 # From
 from tensorflow.keras import layers
 from tensorflow import keras
+# Utils
+from utils.utils.utils import TFUtils
 # typing
 from typing import Any
 
 class Losses():
+    @staticmethod
+    def get_normalized_loss(
+        t1: tf.Tensor, 
+        t2:tf.Tensor,
+        L1: Any,
+        L2: Any
+    ) -> tf.Tensor:
+        t1 = TFUtils.custom_reshape(
+            t1
+        )
+        t2 = TFUtils.custom_reshape(
+            t2
+        )
+        diff = (t1 - t2)
+        max_per_row = tf.reduce_max(
+            tf.concat(
+                [
+                    tf.math.abs(t1),
+                    tf.math.abs(t2)
+                ],
+                axis = 1
+            ), 
+            axis = 1
+        )
+        max_per_row = TFUtils.custom_reshape(
+            max_per_row
+        )
+        diff_normalized = diff / max_per_row
+        partial_loss = tf.where(
+            diff_normalized > 1,
+            L2(
+                t1 / max_per_row,
+                t2 / max_per_row
+            ),
+            L1(diff_normalized) 
+        )
+        return partial_loss
+    
     @staticmethod
     def loss_lgm( 
         x: tf.Tensor, 
@@ -48,17 +88,16 @@ class Losses():
             TM,
             ct
         )
-        diff = predictions[:, -1] - real_values
+        # Strike loss
+        strike_loss = Losses.get_normalized_loss(
+            t1 = real_values,
+            t2 = predictions[: , -1],
+            L1 = L1,
+            L2 = L2
+        )
         strike_loss = tf.reshape(
-            tf.where(
-                diff > 1,
-                L2(
-                    predictions[:, -1],
-                    real_values
-                ),
-                L1(diff) 
-            ),
-            (batch_size,1)
+            strike_loss,
+            (batch_size, 1)
         )
         '''print(f'V: {v[:10, -1]}')
         print(f'Predictions: {predictions[:10, -1]}')
@@ -105,17 +144,15 @@ class Losses():
                 for grad_i in vector:
                     f.write(f'{grad_i},')
                 f.write(f'\n')
-        # Careful: global variable
-        diff = derivatives - df_dxn
+        # Derivative loss
+        derivative_loss = Losses.get_normalized_loss(
+            t1 = derivatives,
+            t2 = df_dxn,
+            L1 = L1,
+            L2 = L2
+        )
         derivative_loss = tf.reshape(
-            tf.where(
-                diff > 1,
-                L2(
-                    derivatives,
-                    df_dxn
-                ),
-                L1(diff) 
-            ),
+            derivative_loss,
             (batch_size, 1)
         )
         # Repeat the tensor to adapt dimensions
@@ -127,18 +164,21 @@ class Losses():
             derivative_loss, 
             final_shape
         )
-        # TODO: Check if this is correct
         # Epoch error per step
-        diff = v - predictions
+        og_shape = v.shape
+        v = tf.reshape(v, [-1])
+        predictions = tf.reshape(predictions, [-1])
+        step_loss = Losses.get_normalized_loss(
+            t1 = v,
+            t2 = predictions,
+            L1 = L1,
+            L2 = L2
+        )
+        step_loss = tf.reshape(step_loss, og_shape)
         error_per_step = tf.cumsum(
-            tf.where(
-                diff > 1,
-                L2(
-                    v,
-                    predictions
-                ),
-                L1(diff) 
-            ),  axis = 1) / (N_steps)
+            step_loss,
+            axis = 1
+        ) / (N_steps)
         # Flatten the cumsum
         error_per_step = tf.reshape(
             error_per_step, 
@@ -166,12 +206,6 @@ class Losses():
             error_per_step, 
             strike_loss_reshaped
         )'''
-        # Sanity purposes
-        difference_strike = tf.math.reduce_mean(
-            tf.math.abs(
-                v[:, -1] - phi(xn_tensor,tn,TM,ct)
-            )
-        )
         # Apply mask to only change given the last step
         if mask_loss is not None:
             loss_per_sample = tf.math.multiply(loss_per_sample, mask_loss)
@@ -181,4 +215,4 @@ class Losses():
         print(f'Idx preds: {idx_preds}')
         print(f'Mean loss: {loss_per_sample.numpy()[idx_preds].mean()}')
         sys.exit()'''
-        return loss_per_sample, losses_trackers, df_dxn, difference_strike
+        return loss_per_sample, losses_trackers, df_dxn

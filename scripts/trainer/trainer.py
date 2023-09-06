@@ -53,7 +53,8 @@ def trainer(
         report_to_wandb: bool = False,
         anneal_lr: bool = True,
         schema: int = 1,
-        save_model: bool = False
+        save_model: bool = False,
+        simulate_in_epoch: bool = False
 ):
     if report_to_wandb:
         wandb.init(
@@ -157,9 +158,10 @@ def trainer(
     while loss > 0.00001 and epoch < epochs:
         df_x = simulate(T, N_steps, sigma, nsims)
         # Data used as features
-        mc_paths_tranformed = df_x[['xt', 'dt']].values
-        x = mc_paths_tranformed.astype(np.float64)
-        delta_x = df_x._delta_x.values.astype(np.float64)
+        if (simulate_in_epoch) | (epoch == 0):
+            mc_paths_tranformed = df_x[['xt', 'dt']].values
+            x = mc_paths_tranformed.astype(np.float64)
+            delta_x = df_x._delta_x.values.astype(np.float64)
         print(f'{epoch}...', end = '')
         for batch in range(batches):
             start_time = time.time()

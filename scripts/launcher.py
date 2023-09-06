@@ -44,6 +44,7 @@ def parse_args():
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("--nsteps", type=int, help="Number of steps for each year path (default 100)", default=50)
     parser.add_argument("--test", type=bool, help="Test", default = True)
+    parser.add_argument("--simulate-in-epoch", type = bool,help = "Simulate paths in each epoch", default = False)
     # Schema
     parser.add_argument("--schema", type=int, help="Schema of the model", default = 1)
     # Trainer 
@@ -105,7 +106,6 @@ if __name__ == '__main__':
     print(f'\tN_steps: {N_steps}')
     print(f'\tX0: {X0}')
     print(f'\tSigma: {sigma}')
-
     # tf model training
     phi_str = args.phi
     # Imprime los valores de los argumentos
@@ -116,6 +116,9 @@ if __name__ == '__main__':
     # Normalize:
     normalize = args.normalize
     print(f"Normalize: {normalize}")
+    # Simulate per epoch
+    simulate_per_epoch = args.simulate_in_epoch
+    print(f"Simulate per epoch: {simulate_per_epoch}")
     # Schema selected:
     print(f'Schema: {args.schema}')
     # Epochs
@@ -133,7 +136,8 @@ if __name__ == '__main__':
         normalize = normalize,
         report_to_wandb = args.wandb,
         schema = args.schema, 
-        save_model = args.save
+        save_model = args.save,
+        simulate_in_epoch= args.simulate_in_epoch
     )
     # Test
     if args.test:

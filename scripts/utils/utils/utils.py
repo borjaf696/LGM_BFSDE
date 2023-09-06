@@ -40,6 +40,13 @@ class CyclicLR(tf.keras.optimizers.schedules.LearningRateSchedule):
         self.clr_iterations += 1
         # Apply decay
         return lr * (self.decay ** (self.clr_iterations / self.step_size))
+    
+class TFUtils():
+    @staticmethod
+    def custom_reshape(tensor):
+        if tf.rank(tensor) == 1:
+            return tf.reshape(tensor, [-1, 1])
+        return tensor 
 
 class MathUtils():
     

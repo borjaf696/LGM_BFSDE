@@ -246,7 +246,7 @@ class LgmSingleStep(tf.keras.Model):
             v, predictions = self.predict(x, delta_x = delta_x)
             v = tf.reshape(v, (batch_size, self.N))
             predictions = tf.reshape(predictions, (batch_size, self.N))
-            loss_values, losses_tracker, analytical_grads, difference_strike = loss(
+            loss_values, losses_tracker, analytical_grads = loss(
                 x = x, 
                 v = v,
                 ct = self._ct,
@@ -291,8 +291,7 @@ class LgmSingleStep(tf.keras.Model):
                         'overall_loss': self.loss_tracker.result(),
                         # Overall derivatives
                         'grads_magnitude': tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
-                        'analytical_grads': tf.reduce_mean(analytical_grads),
-                        'difference_strike': tf.reduce_mean(difference_strike),
+                        'analytical_grads': tf.reduce_mean(analytical_grads)
                     }
                 )  
         # Store losses
