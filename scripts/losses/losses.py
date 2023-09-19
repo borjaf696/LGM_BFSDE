@@ -13,7 +13,7 @@ class Losses():
     @staticmethod
     def get_normalized_loss(
         t1: tf.Tensor, 
-        t2:tf.Tensor,
+        t2: tf.Tensor,
         L1: Any,
         L2: Any
     ) -> tf.Tensor:
@@ -37,7 +37,10 @@ class Losses():
         max_per_row = TFUtils.custom_reshape(
             max_per_row
         )
-        diff_normalized = diff / max_per_row
+        diff_normalized = TFUtils.safe_divide(
+            diff,
+            max_per_row
+        )
         partial_loss = tf.where(
             diff_normalized > 1,
             L2(
@@ -45,6 +48,30 @@ class Losses():
                 t2 / max_per_row
             ),
             L1(diff_normalized) 
+        )
+        return partial_loss
+    
+    @staticmethod
+    def get_loss(
+        t1: tf.Tensor, 
+        t2: tf.Tensor,
+        L1: Any,
+        L2: Any
+    ) -> tf.Tensor:
+        t1 = TFUtils.custom_reshape(
+            t1
+        )
+        t2 = TFUtils.custom_reshape(
+            t2
+        )
+        diff = (t1 - t2)
+        partial_loss = tf.where(
+            diff > 1,
+            L2(
+                t1,
+                t2
+            ),
+            L1(diff) 
         )
         return partial_loss
     

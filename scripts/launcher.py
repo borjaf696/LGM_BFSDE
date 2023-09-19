@@ -11,7 +11,9 @@ from utils.preprocess.preprocess import Preprocessor
 from utils.utils.utils import (
     ZeroBond,
     IRS,
-    Swaption
+    Swaption,
+    TestExamples,
+    Utils
 )
 
 from utils.tester.tester import (
@@ -41,6 +43,7 @@ def parse_args():
     parser.add_argument("--TM", type = int, help = "Time to end Swap/IRS (default 8)", default = None)
     parser.add_argument("--T", type=int, help="Strike time 1/2/4/8 (default 1)", default=1)
     parser.add_argument("--nsims", type=int, help="Number of simulations (default 500)", default=500)
+    parser.add_argument("--dim", type = int, help = "Number of dimensions for each component", default=1)
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("--nsteps", type=int, help="Number of steps for each year path (default 100)", default=50)
     parser.add_argument("--test", type=bool, help="Test", default = True)
@@ -68,6 +71,8 @@ def get_phi(active):
         phi = IRS.IRS_normalized
     elif active == 'swaption':
         phi = Swaption.Swaption_normalized
+    elif active == 'test':
+        phi = TestExamples.strike_value
     return phi
 
 def get_phi_test(active):
@@ -91,12 +96,13 @@ if __name__ == '__main__':
     if phi is None:
         raise ArgumentFailure(f'{args.phi} is not a valid phi function')
     # Configs
-    T, TM, N_steps, X0, sigma = (
+    T, TM, N_steps, X0, sigma, dim = (
         args.T, 
         args.TM,
         args.nsteps * args.T,
         0, 
-        args.sigma
+        args.sigma,
+        args.dim
     )
     nsims = args.nsims
     print(f'Simulations:')
@@ -104,6 +110,7 @@ if __name__ == '__main__':
     print(f'\tT: {T}')
     print(f'\tTM: {TM}')
     print(f'\tN_steps: {N_steps}')
+    print(f'\tDimensions: {dim}')
     print(f'\tX0: {X0}')
     print(f'\tSigma: {sigma}')
     # tf model training
@@ -129,6 +136,7 @@ if __name__ == '__main__':
         T = T,
         TM = TM,
         N_steps = N_steps,
+        dim = dim,
         sigma = sigma,
         nsims = nsims,
         phi = phi,
@@ -142,35 +150,41 @@ if __name__ == '__main__':
     # Test
     if args.test:
         # TODO: Remove from here
-        test_name_file = f'data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
+        test_name_file = f'data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_dim_{dim}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
         # TODO: Remove from here
-        train_name_file = f'data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
+        train_name_file = f'data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_dim_{dim}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
         test_sims = int(nsims * 0.2)
         mcsimulator = MCSimulation(
             T = T,  
             X0 = X0, 
             sigma = sigma,
             N = N_steps,
+            dim = dim,
             period = None
         )
         mc_paths_test, W_test = mcsimulator.simulate(
             test_sims
         )
-        mc_paths_transpose_test = mc_paths_test.T
-        df_x_test = Preprocessor.preprocess_paths(
-            T,
-            mcsimulator.N,
-            mc_paths_transpose_test,
-            test_sims
-        )
-        # W sanity
-        W_test_transpose = W_test.T.reshape(
-            (
-                test_sims * N_steps,
-                1
+        if len(mc_paths_test.shape) < 2:
+            df_x_test = Preprocessor.preprocess_paths(
+                T,
+                N_steps,
+                mc_paths_test,
+                test_sims
             )
+        else:
+            df_x_test = Preprocessor.preprocess_paths_multidimensional(
+                T,
+                N_steps,
+                dim,
+                mc_paths_test,
+                test_sims
+            )
+        features = Utils.get_features_with_patter(
+            df = df_x_test, 
+            pattern = "X",
+            extra_cols = ["dt"]
         )
-        df_x_test['W'] = W_test_transpose
         print(f'Test Features shape: {df_x_test.shape}')
         print(f'Test columns: {df_x_test.columns}')
         tester = get_phi_test(phi_str)
@@ -180,6 +194,7 @@ if __name__ == '__main__':
             df = df_x_test,
             model = model,
             test_name_file = test_name_file,
+            features= features,
             # TODO: Deprecate this
             sigma_value = sigma,
             TM = TM,

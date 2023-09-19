@@ -26,6 +26,7 @@ class LgmSingleStep(tf.keras.Model):
         T = 0,
         name="zerobond",
         *,
+        dim = 2,
         verbose = False,
         sigma = None,
         batch_size = None,
@@ -66,7 +67,7 @@ class LgmSingleStep(tf.keras.Model):
         self.__name = name
         # Model with time and value
         input_tmp = keras.Input(
-            shape = (2, ), 
+            shape = (dim, ), 
             name = self.__name
         )
         if normalize:
@@ -380,11 +381,22 @@ class LgmSingleStep(tf.keras.Model):
         """
         return self._grads[:, i] if self._grads is not None else None
 
-    def predict(self, X:tf.Tensor, 
-                delta_x:tf.Tensor,
-                build_masks: bool = False,
-                debug: bool = False):
+    def predict(self, 
+        x:tf.Tensor, 
+        delta_x:tf.Tensor,
+        build_masks: bool = False,
+        debug: bool = False
+    ):
         pass
+    
+    def predict_loop(self,
+        x:tf.Tensor,
+        delta_x: tf.Tensor,
+        build_masks: bool = False,
+        debug: bool = False
+    ):
+        pass
+        
     
     # Save model 
     def save_weights(self, path):

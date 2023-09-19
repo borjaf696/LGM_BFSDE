@@ -19,23 +19,48 @@ from wandb.keras import WandbCallback
 
 from utils.utils.utils import CyclicLR
 
-def simulate(T, N_steps, sigma, nsims):
+def simulate(
+    T, 
+    N_steps, 
+    dim,
+    sigma, 
+    nsims
+):
     mcsimulator = MCSimulation(
         T = T, 
         N = N_steps, 
+        dim = dim,
         X0 = 0, 
         sigma = sigma
     )
     # Training paths
     mc_paths, _ = mcsimulator.simulate(nsims)
-    mc_paths_transpose = mc_paths.T
-    df_x = Preprocessor.preprocess_paths(
-        T,
-        N_steps,
-        mc_paths_transpose,
-        nsims
-    )    
-    return df_x
+    if len(mc_paths.shape) < 2:
+        df_x = Preprocessor.preprocess_paths(
+            T,
+            N_steps,
+            mc_paths,
+            nsims
+        )
+    else:
+        df_x = Preprocessor.preprocess_paths_multidimensional(
+            T,
+            N_steps,
+            dim,
+            mc_paths,
+            nsims
+        )
+    features = []
+    for column in df_x.columns.values:
+        if column[0] == "X":
+            features.append(
+                column
+            )
+    features.append(
+        "dt"
+    )
+    
+    return df_x, features
 
 def trainer(
         epochs: int = 110,
@@ -45,6 +70,7 @@ def trainer(
         T: int,
         TM: int,
         N_steps: int,
+        dim: int,
         sigma: float,
         nsims: int,
         phi: Any,
@@ -59,7 +85,7 @@ def trainer(
     if report_to_wandb:
         wandb.init(
             project="lgm",
-            name = f'schema_{schema}_normalize_{normalize}_{phi_str}_{T}_{TM}_{epochs}_{size_of_the_batch}_{nsims}_{N_steps}_{architecture}',
+            name = f'schema_{schema}_normalize_{normalize}_{phi_str}_{T}_{TM}_{epochs}_{size_of_the_batch}_{nsims}_{N_steps}_{architecture}_dim_{dim}',
             config={
                 "epochs": epochs,
                 "size_of_the_batch": size_of_the_batch,
@@ -73,30 +99,38 @@ def trainer(
                 "architecture": architecture,
                 "schema": schema,
                 "normalize": normalize,
+                "dim": dim,
                 "log_step": 10
             }
         )
     if TM is not None:
-        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}.h5'
+        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}.h5'
     else:
-        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_normalize{normalize}_step_{T}_{nsims}_{N_steps}.h5'
+        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize{normalize}_step_{T}_{nsims}_{N_steps}.h5'
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
-    size_of_the_batch = 500
+    size_of_the_batch = 256
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
     future_T = TM if TM is not None else T
     # Initial simulation to adapt normalization
-    df_x_0 = simulate(T, N_steps, sigma, nsims*10)
-    mc_paths_tranformed_x0 = df_x_0[['xt', 'dt']].values
+    df_x, features = simulate(
+        T = T, 
+        N_steps = N_steps, 
+        dim = dim,
+        sigma = sigma, 
+        nsims = nsims * 100 if simulate_in_epoch else nsims
+    )
+    mc_paths_tranformed_x0 = df_x[features].values
     x0 = mc_paths_tranformed_x0.astype(np.float64)
     if schema == 1:
         lgm_single_step = LgmSingleStepNaive(
             n_steps = N_steps, 
             T = T, 
             future_T = future_T,
+            dim = dim,
             verbose = False,
             sigma = sigma,
             batch_size = size_of_the_batch,
@@ -111,6 +145,7 @@ def trainer(
             n_steps = N_steps, 
             T = T, 
             future_T = future_T,
+            dim = dim,
             verbose = False,
             sigma = sigma,
             batch_size = size_of_the_batch,
@@ -125,6 +160,7 @@ def trainer(
             n_steps = N_steps, 
             T = T, 
             future_T = future_T,
+            dim = dim,
             verbose = False,
             sigma = sigma,
             batch_size = size_of_the_batch,
@@ -146,7 +182,7 @@ def trainer(
     if anneal_lr:
         lr = CyclicLR(base_lr=1e-3, max_lr=0.006, step_size=100, decay=0.99, mode='triangular')
     else:
-        lr = 1e-3
+        lr = 3e-5
     # Compile the model
     lgm_single_step.define_compiler(
         optimizer = 'adam', 
@@ -156,12 +192,19 @@ def trainer(
     epoch = 0
     loss = np.infty
     while loss > 0.00001 and epoch < epochs:
-        df_x = simulate(T, N_steps, sigma, nsims)
         # Data used as features
-        if (simulate_in_epoch) | (epoch == 0):
-            mc_paths_tranformed = df_x[['xt', 'dt']].values
+        if (epoch == 0) or simulate_in_epoch:
+            if simulate_in_epoch:
+                df_x, features = simulate(
+                    T = T, 
+                    N_steps = N_steps, 
+                    dim = dim,
+                    sigma = sigma, 
+                    nsims = nsims
+                )
+            mc_paths_tranformed = df_x[features].values
             x = mc_paths_tranformed.astype(np.float64)
-            delta_x = df_x._delta_x.values.astype(np.float64)
+            delta_x = df_x.delta_x_0.values.astype(np.float64)
         print(f'{epoch}...', end = '')
         for batch in range(batches):
             start_time = time.time()
