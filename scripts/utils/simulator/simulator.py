@@ -13,10 +13,11 @@ from utils.utils.utils import (
 )
 
 class MCSimulation():
-    def __init__(self, T, X0, sigma, N = None, period = None, model = 'LGM'):
+    def __init__(self, T, X0, sigma, N = None, dim = None, period = None, model = 'LGM'):
         self._params = {
             'T':T,
             'N':N if period is None else int(T / TIMES[period]),
+            'dim': dim,
             'X0':X0,
             'sigma':sigma,
         }
@@ -27,20 +28,20 @@ class MCSimulation():
         return self._params['N']
         
     def simulate(self, nsim = 1e3, show = False):
-        T, N, X0, sigma = itemgetter('T', 'N', 'X0', 'sigma')(self._params)
+        T, N, X0, sigma, dim = itemgetter('T', 'N', 'X0', 'sigma', 'dim')(self._params)
         nsim = int(nsim)
         dt = T / N
         # Brownian simulation
-        W, X = np.zeros([N,nsim]), np.zeros([N,nsim])
+        dimensions = [N, nsim, dim]
+        W, X = np.zeros(dimensions), np.zeros(dimensions)
         # Starting point
-        W[0, :] = X0
-        X[0, :] = X0
+        W[0, :, :] = X0
+        X[0, :, :] = X0
         for i in range(1, N):
-            W[i, :] = W[i - 1, :] + np.random.randn(nsim) * np.sqrt(dt)
+            W[i, :, :] = W[i - 1, :, :] + np.random.randn(nsim, dim) * np.sqrt(dt)
         # X simulation
         for i in range(1, N):
-            X[i, :] = X[i - 1, :] + sigma * (W[i, :] - W[i - 1, :])
+            X[i, :, :] = X[i - 1, :, :] + sigma * (W[i, :] - W[i - 1, :])
         if show:
             X = np.linspace(0, T, N)
-        
         return X, W

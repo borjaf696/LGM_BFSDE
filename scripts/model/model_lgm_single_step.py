@@ -26,6 +26,7 @@ class LgmSingleStep(tf.keras.Model):
         T = 0,
         name="zerobond",
         *,
+        dim = 2,
         verbose = False,
         sigma = None,
         batch_size = None,
@@ -66,7 +67,7 @@ class LgmSingleStep(tf.keras.Model):
         self.__name = name
         # Model with time and value
         input_tmp = keras.Input(
-            shape = (2, ), 
+            shape = (dim, ), 
             name = self.__name
         )
         if normalize:
@@ -246,7 +247,7 @@ class LgmSingleStep(tf.keras.Model):
             v, predictions = self.predict(x, delta_x = delta_x)
             v = tf.reshape(v, (batch_size, self.N))
             predictions = tf.reshape(predictions, (batch_size, self.N))
-            loss_values, losses_tracker, analytical_grads, difference_strike = loss(
+            loss_values, losses_tracker, analytical_grads = loss(
                 x = x, 
                 v = v,
                 ct = self._ct,
@@ -291,8 +292,7 @@ class LgmSingleStep(tf.keras.Model):
                         'overall_loss': self.loss_tracker.result(),
                         # Overall derivatives
                         'grads_magnitude': tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
-                        'analytical_grads': tf.reduce_mean(analytical_grads),
-                        'difference_strike': tf.reduce_mean(difference_strike),
+                        'analytical_grads': tf.reduce_mean(analytical_grads)
                     }
                 )  
         # Store losses
@@ -381,11 +381,22 @@ class LgmSingleStep(tf.keras.Model):
         """
         return self._grads[:, i] if self._grads is not None else None
 
-    def predict(self, X:tf.Tensor, 
-                delta_x:tf.Tensor,
-                build_masks: bool = False,
-                debug: bool = False):
+    def predict(self, 
+        x:tf.Tensor, 
+        delta_x:tf.Tensor,
+        build_masks: bool = False,
+        debug: bool = False
+    ):
         pass
+    
+    def predict_loop(self,
+        x:tf.Tensor,
+        delta_x: tf.Tensor,
+        build_masks: bool = False,
+        debug: bool = False
+    ):
+        pass
+        
     
     # Save model 
     def save_weights(self, path):

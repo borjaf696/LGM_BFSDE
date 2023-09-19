@@ -1,7 +1,13 @@
 import tensorflow as tf
 import numpy as np
-from scipy.stats import norm
+import pandas as pd
 import sys
+from scipy.stats import norm
+from typing import (
+    Any, 
+    List,
+    Dict
+)
 
 # Constants
 TAUS = {
@@ -40,7 +46,35 @@ class CyclicLR(tf.keras.optimizers.schedules.LearningRateSchedule):
         self.clr_iterations += 1
         # Apply decay
         return lr * (self.decay ** (self.clr_iterations / self.step_size))
+    
+class TFUtils():
+    @staticmethod
+    def custom_reshape(tensor):
+        if tf.rank(tensor) == 1:
+            return tf.reshape(tensor, [-1, 1])
+        return tensor 
 
+    @staticmethod
+    def safe_divide(numerator, denominator, value_if_zero=0.0):
+        denominator_safe = tf.where(denominator == 0, tf.ones_like(denominator), denominator)
+        result = numerator / denominator_safe
+        result_safe = tf.where(denominator == 0, tf.ones_like(result) * value_if_zero, result)
+        return result_safe
+    
+class Utils():
+    
+    @staticmethod
+    def get_features_with_patter(df: pd.DataFrame, pattern: str, extra_cols: List[str]):
+        features = []
+        for column in df.columns.values:
+            if column[0] == pattern:
+                features.append(
+                    column
+                )
+        features += extra_cols
+        
+        return features
+    
 class MathUtils():
     
     @staticmethod
@@ -676,3 +710,16 @@ class Swaption():
             axis = 1
         )
         return tf.reduce_max(tensor_irs, axis = 1) / N
+    
+class TestExamples():
+    
+    @staticmethod
+    def test_function(x: np.array, t: np.array, T: int, r: float, sigma: float):
+        difference = T - t
+        exponential = np.exp((r + sigma)*difference)
+        norma = np.linalg(x, axis = 0)
+        return exponential * norma
+        
+    @staticmethod
+    def strike_value(x: tf.Tensor):
+        return tf.linalg.norm(x)

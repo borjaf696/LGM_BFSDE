@@ -9,7 +9,8 @@ from utils.utils.utils import (
     ZeroBond,
     IRS,
     Swaption,
-    FinanceUtils
+    FinanceUtils,
+    TestExamples
 )
 
 # Wandb integration
@@ -18,10 +19,10 @@ from wandb.keras import WandbCallback
 
 class Tester(ABC):
     
-    def _calculate_basics(self, df, model, sigma_value = None):
-        mc_paths_tranformed = df[['xt', 'dt']].values
+    def _calculate_basics(self, df, model, sigma_value = None, features = None):
+        mc_paths_tranformed = df[features].values
         x = mc_paths_tranformed.astype(np.float64)
-        delta_x = df._delta_x.values.astype(np.float64)
+        delta_x = df.delta_x_0.values.astype(np.float64)
         v_lgm_single_step, _ = model.predict(
             x, 
             delta_x,
@@ -42,7 +43,7 @@ class Tester(ABC):
             lambda x: 
                 ZeroBond.N(
                     x['dt'],
-                    x.xt,
+                    x.X_0,
                     x.ct
                 ),
             axis = 1
@@ -52,23 +53,24 @@ class Tester(ABC):
         return df
     
     @abstractmethod
-    def test(self, df, model, test_name_file, sigma_value, TM = None, T = None, report_to_wandb = False):
+    def test(self, df, model, test_name_file, sigma_value, features = None, TM = None, T = None, report_to_wandb = False):
         pass
     
 class ZeroBondTester(Tester):
     
-    def test(self, df, model, test_name_file, sigma_value, TM = None, T = None, report_to_wandb = False):
+    def test(self, df, model, test_name_file, sigma_value, features = None, TM = None, T = None, report_to_wandb = False):
         assert test_name_file is not None, 'Test name file is not provided'
         
         df = super()._calculate_basics(
             df, 
             model,  
-            sigma_value
+            sigma_value,
+            features = features
         )
         df['V'] = df.apply(
             lambda x:
                 ZeroBond.Z(
-                    x.xt,
+                    x.X_0,
                     x['dt'],
                     T,  
                     x.ct
@@ -78,7 +80,7 @@ class ZeroBondTester(Tester):
         df['V_normalized'] = df.apply(
             lambda x:
                 ZeroBond.Z_norm(
-                    x.xt,
+                    x.X_0,
                     x['dt'],
                     T,  
                     x.ct
@@ -191,3 +193,71 @@ class SwaptionTester(Tester):
             test_name_file, 
             index = False
         )
+        
+# TODO: Correct and complete
+class ToyExample(Tester):
+    
+    def test(self, df, model, test_name_file, sigma_value, TM = None, T = None, report_to_wandb = False):
+        assert test_name_file is not None, 'Test name file is not provided'
+        
+        df = super()._calculate_basics(
+            df, 
+            model,  
+            sigma_value
+        )
+        df['V'] = df.apply(
+            lambda x:
+                TestExamples.test_function(
+                    x.xt,
+                    x['dt'],
+                    T
+                ),
+                axis = 1
+        )
+        df['V_normalized'] = df.apply(
+            lambda x:
+                ZeroBond.Z_norm(
+                    x.xt,
+                    x['dt'],
+                    T,  
+                    x.ct
+                ),
+                axis = 1
+        )
+        df['V_normalized_001'] = df.apply(
+            lambda x:
+                ZeroBond.Z_norm(
+                    0.01,
+                    x['dt'],
+                    T,  
+                    x.ct
+                ),
+                axis = 1
+        )
+        # Errors:
+        df['AbsErrors'] = np.abs(df.V_normalized - df.lgm_single_step_V)
+        folder = '/'.join(
+            test_name_file.split('/')[:-1]
+        )
+        print(f'{folder}')
+        if not os.path.exists(folder):
+            print(f'Creating folder {folder}')
+            os.makedirs(folder)
+        
+        df.to_csv(
+            test_name_file, 
+            index = False
+        )
+        
+        if report_to_wandb:
+            try:
+                # TODO: Adjust to report always test metrics
+                wandb.log(
+                    {
+                        't': df.dt.values.astype(np.float64),
+                        'V': df.V.values.astype(np.float64),
+                        'V_est': df.V_est.values.astype(np.float64)
+                    }
+                )
+            except Exception as e:
+                pass
