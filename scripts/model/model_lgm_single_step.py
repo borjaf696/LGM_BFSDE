@@ -92,28 +92,22 @@ class LgmSingleStep(tf.keras.Model):
         print(f'Number of hidden units: {configuration["hidden_units"]}')
         # Build dense layers
         self.__dense_layers = []
+        self.__batch_norm_layers = []
+
         for i in range(self.__num_layers):
             self.__dense_layers.append(
                 tf.keras.layers.Dense(
                     units = configuration['hidden_units'],
-                    kernel_initializer = tf.keras.initializers.GlorotUniform(),
+                    kernel_initializer = tf.keras.initializers.HeUniform(),
                     kernel_regularizer=tf.keras.regularizers.l2(0.01),
                     name = 'internal_dense_'+str(i)
                 )
             )
-        # Adding skip connections
-        for i in range(0, self.__num_layers - 1, 1):
-            objective_layer = x
-            # Layer skip
-            x = self.__dense_layers[i](objective_layer)
-            x = tf.keras.layers.BatchNormalization()(x)
+            self.__batch_norm_layers.append(tf.keras.layers.BatchNormalization())
+        for i in range(0, self.__num_layers):
+            x = self.__dense_layers[i](x)
+            x = self.__batch_norm_layers[i](x)
             x = tf.keras.layers.ReLU()(x)
-            '''# Layer to skip
-            x2 = self.__dense_layers[i+1](x1)
-            x2 = tf.keras.layers.BatchNormalization()(x2)
-            x2 = tf.keras.layers.Dropout(0.5)(x2)
-            # Skip connection
-            x = tf.keras.layers.Add()([x1, x2])'''
         output_tmp = layers.Dense(
             units = 1, 
             kernel_initializer = tf.keras.initializers.GlorotUniform(),
@@ -261,7 +255,6 @@ class LgmSingleStep(tf.keras.Model):
                 mask_loss = self._mask_loss
             )
         grads = tape.gradient(loss_values, self.model.trainable_weights)
-        # print(f'Grads: {len(grads)}')
         self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
         # Losses tracker
         self._loss_tracker_t1.update_state(losses_tracker['t1'])

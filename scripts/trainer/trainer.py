@@ -130,7 +130,7 @@ def trainer(
             n_steps = N_steps, 
             T = T, 
             future_T = future_T,
-            dim = dim,
+            dim = x0.shape[1],
             verbose = False,
             sigma = sigma,
             batch_size = size_of_the_batch,
