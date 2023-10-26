@@ -262,32 +262,25 @@ class LgmSingleStep(tf.keras.Model):
         self._loss_tracker_t3.update_state(losses_tracker['t3'])
         # Compute metrics
         self.loss_tracker.update_state(loss_values)
-        if epoch % 10 == 0:
-            if start_time is None:
-                print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
-            else:
-                import time
-                print(f'Epoch {epoch} Batch {batch} Mean loss {self.loss_tracker.result()} Time per epoch: {(time.time() - start_time) / (epoch + 1)}s')
-                print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
-                # print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
-                self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
-                self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
-                self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())  
-            if self.__wandb:
-                wandb.log(
-                    {
-                        'lr': self._optimizer.learning_rate.numpy(),
-                        'epochs': epoch,
-                        'batch:': batch,
-                        'strike_loss': self._loss_tracker_t1.result(),
-                        'derivative_loss': self._loss_tracker_t2.result(),
-                        'steps_error_loss': self._loss_tracker_t3.result(),
-                        'overall_loss': self.loss_tracker.result(),
-                        # Overall derivatives
-                        'grads_magnitude': tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
-                        'analytical_grads': tf.reduce_mean(analytical_grads)
-                    }
-                )  
+        # Monitor results
+        self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
+        self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
+        self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())  
+        if self.__wandb:
+            wandb.log(
+                {
+                    'lr': self._optimizer.learning_rate.numpy(),
+                    'epochs': epoch,
+                    'batch:': batch,
+                    'strike_loss': self._loss_tracker_t1.result(),
+                    'derivative_loss': self._loss_tracker_t2.result(),
+                    'steps_error_loss': self._loss_tracker_t3.result(),
+                    'overall_loss': self.loss_tracker.result(),
+                    # Overall derivatives
+                    'grads_magnitude': tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
+                    'analytical_grads': tf.reduce_mean(analytical_grads)
+                }
+            )  
         # Store losses
         return float(self.loss_tracker.result()), float(self._loss_tracker_t1.result()), float(self._loss_tracker_t2.result()), float(self._loss_tracker_t3.result())
    
@@ -297,6 +290,11 @@ class LgmSingleStep(tf.keras.Model):
         self._loss_tracker_t2.reset_states()
         self._loss_tracker_t3.reset_states()
         self.loss_tracker.reset_states()
+        
+    def plot_tracker_results(self, epoch: int):
+        print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
+        print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
+
     
     def get_losses_internal(self):
         """_summary_

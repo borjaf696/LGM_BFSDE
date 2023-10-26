@@ -74,22 +74,13 @@ class Losses():
         T: int = None,
         TM: int = None,
         phi: Any = None,
-        mask_loss: tf.Tensor = None
     ):
         # Loss functions
         L1 = tf.math.abs
         L2 = tf.math.squared_difference
-        #print(f'Predictions:{predictions[0,:]}, V: {v[0, :]}')
         betas = [1.0, 1.0, 1.0]
-        # Tiles
-        tile_multiples = tf.constant([1, N_steps], tf.int64)
         samples, _ = x.shape
         batch_size = int(np.floor(samples / N_steps))
-        # Final shape
-        final_shape = [
-            N_steps * batch_size,
-            1
-        ]
         # For f and f'
         x_reformat = tf.reshape(x[:, 0], (batch_size, N_steps))
         xn_tensor = x_reformat[:, -1]
@@ -175,17 +166,4 @@ class Losses():
                 derivative_loss
             )
         )
-        '''loss_per_sample = tf.math.add(
-            error_per_step, 
-            strike_loss_reshaped
-        )'''
-        # Apply mask to only change given the last step
-        """if mask_loss is not None:
-            loss_per_sample = tf.math.multiply(loss_per_sample, mask_loss)"""
-        '''import sys
-        idx_preds = np.array(range(N_steps - 1, strike_loss_reshaped.shape[0], N_steps))
-        print(f'Loss per sample: {loss_per_sample.numpy()[idx_preds]}')
-        print(f'Idx preds: {idx_preds}')
-        print(f'Mean loss: {loss_per_sample.numpy()[idx_preds].mean()}')
-        sys.exit()'''
         return loss_per_sample, losses_trackers, df_dxn

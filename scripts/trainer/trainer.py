@@ -110,7 +110,7 @@ def trainer(
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
-    size_of_the_batch = 256
+    size_of_the_batch = 64
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
@@ -121,7 +121,7 @@ def trainer(
         N_steps = N_steps, 
         dim = dim,
         sigma = sigma, 
-        nsims = nsims * 100 if simulate_in_epoch else nsims
+        nsims = nsims * 10 if simulate_in_epoch else nsims
     )
     mc_paths_tranformed_x0 = df_x[features].values
     x0 = mc_paths_tranformed_x0.astype(np.float64)
@@ -218,6 +218,8 @@ def trainer(
                 delta_x = delta_x_batch,
                 loss = Losses.loss_lgm
             )
+        if epoch % 10 == 0:
+            lgm_single_step.plot_tracker_results(epoch)
         epoch += 1
         # Reset error trackers
         lgm_single_step.reset_trackers()
