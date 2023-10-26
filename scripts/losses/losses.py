@@ -24,28 +24,15 @@ class Losses():
             t2
         )
         diff = (t1 - t2)
-        max_per_row = tf.reduce_max(
-            tf.concat(
-                [
-                    tf.math.abs(t1),
-                    tf.math.abs(t2)
-                ],
-                axis = 1
-            ), 
-            axis = 1
-        )
-        max_per_row = TFUtils.custom_reshape(
-            max_per_row
-        )
         diff_normalized = TFUtils.safe_divide(
             diff,
-            max_per_row
+            tf.math.abs(t1)
         )
         partial_loss = tf.where(
-            diff_normalized > 1,
+            diff_normalized >= 1,
             L2(
-                t1 / max_per_row,
-                t2 / max_per_row
+                t1 / tf.math.abs(t1),
+                t2 / tf.math.abs(t1)
             ),
             L1(diff_normalized) 
         )
@@ -116,7 +103,7 @@ class Losses():
             ct
         )
         # Strike loss
-        strike_loss = Losses.get_normalized_loss(
+        strike_loss = Losses.get_loss(
             t1 = real_values,
             t2 = predictions[: , -1],
             L1 = L1,
@@ -143,7 +130,7 @@ class Losses():
         )
         df_dxn = grad_df['xn'] if grad_df['xn'] is not None else 0. * xn
         # Derivative loss
-        derivative_loss = Losses.get_normalized_loss(
+        derivative_loss = Losses.get_loss(
             t1 = derivatives,
             t2 = df_dxn,
             L1 = L1,
@@ -154,7 +141,7 @@ class Losses():
         og_shape = v.shape
         v = tf.reshape(v, [-1])
         predictions = tf.reshape(predictions, [-1])
-        step_loss = Losses.get_normalized_loss(
+        step_loss = Losses.get_loss(
             t1 = v,
             t2 = predictions,
             L1 = L1,
@@ -162,24 +149,24 @@ class Losses():
         )
         step_loss = tf.reshape(step_loss, og_shape)
         error_per_step = tf.cumsum(
-            step_loss,
+            step_loss[:, 1:],
             axis = 1
-        ) / (N_steps)
+        )
         # Reduce sum the cumulative error
         error_per_step = tf.reduce_sum(
             error_per_step[:, -2] / N_steps / batch_size
         )
+        # Weigth the errors
+        strike_loss *= betas[0]
+        derivative_loss *= betas[1]
+        error_per_step *= betas[2]
+        
         # Record internal losses
         losses_trackers = {
             't1': strike_loss,
             't2': derivative_loss,
             't3': error_per_step
         }
-        # Weigth the errors
-        strike_loss *= betas[0]
-        derivative_loss *= betas[1]
-        error_per_step *= betas[2]
-        
         
         loss_per_sample = tf.math.add(
             error_per_step, 
@@ -193,15 +180,12 @@ class Losses():
             strike_loss_reshaped
         )'''
         # Apply mask to only change given the last step
-        if mask_loss is not None:
-            loss_per_sample = tf.math.multiply(loss_per_sample, mask_loss)
+        """if mask_loss is not None:
+            loss_per_sample = tf.math.multiply(loss_per_sample, mask_loss)"""
         '''import sys
         idx_preds = np.array(range(N_steps - 1, strike_loss_reshaped.shape[0], N_steps))
         print(f'Loss per sample: {loss_per_sample.numpy()[idx_preds]}')
         print(f'Idx preds: {idx_preds}')
         print(f'Mean loss: {loss_per_sample.numpy()[idx_preds].mean()}')
         sys.exit()'''
-        print(f"Error per step: {error_per_step}")
-        print(f"Error derivatives: {derivative_loss}")
-        print(f"Error strike: {strike_loss}")
-        return error_per_step, losses_trackers, df_dxn
+        return loss_per_sample, losses_trackers, df_dxn

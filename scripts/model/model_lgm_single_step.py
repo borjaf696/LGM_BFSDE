@@ -261,7 +261,7 @@ class LgmSingleStep(tf.keras.Model):
         self._loss_tracker_t2.update_state(losses_tracker['t2'])
         self._loss_tracker_t3.update_state(losses_tracker['t3'])
         # Compute metrics
-        self.loss_tracker.update_state(loss_values*self.N)
+        self.loss_tracker.update_state(loss_values)
         if epoch % 10 == 0:
             if start_time is None:
                 print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
