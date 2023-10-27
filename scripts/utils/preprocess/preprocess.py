@@ -77,7 +77,7 @@ class Preprocessor:
                     "sim"
                 ]
             )[f"X_{i}"].shift(1)
-            df_x[f"delta_x_{i}"] = (df_x[f"_delta_x_{i}"] - df_x[f"X_{i}"])
+            df_x[f"delta_x_{i}"] = (df_x[f"X_{i}"] - df_x[f"_delta_x_{i}"])
             df_x.loc[df_x[f"delta_x_{i}"].isna(), f"delta_x_{i}"] = 0.
         # Sort to get the examples in blocks
         df_x.sort_values(
