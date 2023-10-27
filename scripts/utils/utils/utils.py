@@ -113,6 +113,25 @@ class MathUtils():
         return gradient
     
     @staticmethod
+    def central_difference_gradients(x, model, h=1e-3):
+        x = tf.convert_to_tensor(x, dtype=tf.float32)
+        gradients = np.zeros_like(x)
+        for j in range(x.shape[1]):
+            h_tensor = np.zeros_like(x)
+            h_tensor[:, j] = h
+            f_x_plus_h = model(x + h_tensor)
+            f_x_minus_h = model(x - h_tensor)
+            gradient = (f_x_plus_h - f_x_minus_h) / (2 * h)
+            gradients[:, j] = np.squeeze(gradient)
+            
+        gradients = tf.convert_to_tensor(
+            gradients,
+            dtype = tf.float32
+        )
+
+        return gradients
+    
+    @staticmethod
     def custom_diagonal_derivative(x, model):
         h = 1e-1
         # Size x

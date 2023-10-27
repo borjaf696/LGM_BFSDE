@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+root_path = Path(__file__).resolve().parent.parent.parent  
+sys.path.append(str(root_path))
 # Imports
 import tensorflow as tf
 import numpy as np
@@ -5,7 +10,7 @@ import numpy as np
 from tensorflow.keras import layers
 from tensorflow import keras
 # Utils
-from utils.utils.utils import TFUtils
+from scripts.utils.utils.utils import TFUtils
 # typing
 from typing import Any
 
@@ -70,7 +75,6 @@ class Losses():
         derivatives: tf.Tensor, 
         predictions: tf.Tensor, 
         N_steps: np.int64, 
-        verbose: bool = False,
         T: int = None,
         TM: int = None,
         phi: Any = None,
@@ -101,7 +105,7 @@ class Losses():
             L2 = L2
         )
         strike_loss = tf.reduce_sum(strike_loss) / batch_size
-        # Autodiff f
+        # Autodiff phi
         xn = tf.Variable(xn_tensor, name = 'xn', trainable = True)
         tn = tf.Variable(np.float64(T), name = 'tn', trainable=False)
         ct = tf.Variable(np.float64(ct), name = 'ct', trainable=False)

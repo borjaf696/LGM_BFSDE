@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+root_path = Path(__file__).resolve().parent.parent.parent  
+sys.path.append(str(root_path))
 # Sys
 import sys
 import os
@@ -11,7 +16,7 @@ from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import layers
 from tensorflow import keras
 # Utils
-from utils.utils.utils import (
+from scripts.utils.utils.utils import (
     FinanceUtils
 ) 
 # Wandb
@@ -55,16 +60,21 @@ class LgmSingleStep(tf.keras.Model):
         self.T = np.float64(T)
         # Same for actives with out future
         self.future_T = future_T
-        # Constantes:
-        print(f'Strike time (T): {T}')
-        print(f'Second strike time (TM): {self.future_T}')
-        print(f'Number of steps per path: {n_steps}')
         self._batch_size = batch_size
         self._expected_sample_size = self.N * self._batch_size
         # Phi function
         self.__phi = phi
         # Type of active
         self.__name = name
+        # Constantes:
+        print(f"{'#'*100}")
+        print(f'Strike time (T): {T}')
+        print(f'Second strike time (TM): {self.future_T}')
+        print(f'Number of steps per path: {n_steps}')
+        print(f"Model name: {self.__name}")
+        print(f"Batch size: {self._batch_size}")
+        print(f"Expected sample size: {self._expected_sample_size}")
+        print(f"{'#'*100}")
         # Model with time and value
         input_tmp = keras.Input(
             shape = (dim, ), 
@@ -346,18 +356,6 @@ class LgmSingleStep(tf.keras.Model):
         # T partial derivatives (for schema 3)
         self._t_grads = tf.reshape(grads['x'][:, 1], (batch_size, self.N))
         self._t_grads_prediction = grads['x'][:, 1]
-        # Verbose to output
-        if self._verbose:
-            log_file = 'logs/20230217/grads_model.log'
-            with open(log_file, 'a+') as f:
-                f.write(f'Grads given X:\n')
-                shape_x, shape_y = features.shape
-                for x_i in range(shape_x):
-                    for y_i in range(shape_y):
-                        f.write(f'{features[x_i, y_i]},')
-                    f.write(f'\n')
-        # Sanity purposes:
-        # print(f'Grads shape: {self._grads.shape}')
         return self._grads, self._grads_prediction, self._t_grads, self._t_grads_prediction
     
     def _get_dv_dxi(self, i, sample_idx = None):
