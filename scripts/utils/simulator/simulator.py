@@ -8,7 +8,7 @@ from operator import itemgetter
 from scipy import stats
 from typing import Optional
 
-from utils.utils.utils import (
+from scripts.utils.utils.utils import (
     TIMES
 )
 

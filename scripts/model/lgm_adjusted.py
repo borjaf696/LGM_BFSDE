@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 import wandb
 
-from losses.losses import Losses
+from scripts.losses.losses import Losses
 from scripts.model.model_lgm_single_step import LgmSingleStep
 
 

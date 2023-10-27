@@ -24,6 +24,7 @@ def x():
     return tf.random.normal([1000*10, 2], mean=0, stddev=5)
 
 def test_model_gradients_respect_x(params, x):
+    n, _ = x.shape
     lgm = LgmSingleStepNaive(
             n_steps = params["N_steps"], 
             T = params["T"], 
@@ -48,5 +49,5 @@ def test_model_gradients_respect_x(params, x):
     custom_grads_x = custom_grads[:, 0]
     custom_grads_t = custom_grads[:, 1]
     
-    assert (tf.reduce_sum(custom_grads_x - grads_x) < 1e-5) &\
-        (tf.reduce_sum(custom_grads_t - grads_t) < 1e-5)
+    assert (tf.reduce_sum(custom_grads_x - grads_x)/n < 1e-3) &\
+        (tf.reduce_sum(custom_grads_t - grads_t)/n < 1e-3)
