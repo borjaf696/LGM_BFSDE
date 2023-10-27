@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+root_path = Path(__file__).resolve().parent.parent.parent  
+sys.path.append(str(root_path))
 # Sys
 import sys
 import os
@@ -11,7 +16,7 @@ from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import layers
 from tensorflow import keras
 # Utils
-from utils.utils.utils import (
+from scripts.utils.utils.utils import (
     FinanceUtils
 ) 
 # Wandb
@@ -55,16 +60,21 @@ class LgmSingleStep(tf.keras.Model):
         self.T = np.float64(T)
         # Same for actives with out future
         self.future_T = future_T
-        # Constantes:
-        print(f'Strike time (T): {T}')
-        print(f'Second strike time (TM): {self.future_T}')
-        print(f'Number of steps per path: {n_steps}')
         self._batch_size = batch_size
         self._expected_sample_size = self.N * self._batch_size
         # Phi function
         self.__phi = phi
         # Type of active
         self.__name = name
+        # Constantes:
+        print(f"{'#'*100}")
+        print(f'Strike time (T): {T}')
+        print(f'Second strike time (TM): {self.future_T}')
+        print(f'Number of steps per path: {n_steps}')
+        print(f"Model name: {self.__name}")
+        print(f"Batch size: {self._batch_size}")
+        print(f"Expected sample size: {self._expected_sample_size}")
+        print(f"{'#'*100}")
         # Model with time and value
         input_tmp = keras.Input(
             shape = (dim, ), 
@@ -92,28 +102,22 @@ class LgmSingleStep(tf.keras.Model):
         print(f'Number of hidden units: {configuration["hidden_units"]}')
         # Build dense layers
         self.__dense_layers = []
+        self.__batch_norm_layers = []
+
         for i in range(self.__num_layers):
             self.__dense_layers.append(
                 tf.keras.layers.Dense(
                     units = configuration['hidden_units'],
-                    kernel_initializer = tf.keras.initializers.GlorotUniform(),
+                    kernel_initializer = tf.keras.initializers.HeUniform(),
                     kernel_regularizer=tf.keras.regularizers.l2(0.01),
                     name = 'internal_dense_'+str(i)
                 )
             )
-        # Adding skip connections
-        for i in range(0, self.__num_layers - 1, 1):
-            objective_layer = x
-            # Layer skip
-            x = self.__dense_layers[i](objective_layer)
-            x = tf.keras.layers.BatchNormalization()(x)
+            self.__batch_norm_layers.append(tf.keras.layers.BatchNormalization())
+        for i in range(0, self.__num_layers):
+            x = self.__dense_layers[i](x)
+            x = self.__batch_norm_layers[i](x)
             x = tf.keras.layers.ReLU()(x)
-            '''# Layer to skip
-            x2 = self.__dense_layers[i+1](x1)
-            x2 = tf.keras.layers.BatchNormalization()(x2)
-            x2 = tf.keras.layers.Dropout(0.5)(x2)
-            # Skip connection
-            x = tf.keras.layers.Add()([x1, x2])'''
         output_tmp = layers.Dense(
             units = 1, 
             kernel_initializer = tf.keras.initializers.GlorotUniform(),
@@ -261,40 +265,32 @@ class LgmSingleStep(tf.keras.Model):
                 mask_loss = self._mask_loss
             )
         grads = tape.gradient(loss_values, self.model.trainable_weights)
-        # print(f'Grads: {len(grads)}')
         self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
         # Losses tracker
         self._loss_tracker_t1.update_state(losses_tracker['t1'])
         self._loss_tracker_t2.update_state(losses_tracker['t2'])
         self._loss_tracker_t3.update_state(losses_tracker['t3'])
         # Compute metrics
-        self.loss_tracker.update_state(loss_values*self.N)
-        if epoch % 10 == 0:
-            if start_time is None:
-                print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
-            else:
-                import time
-                print(f'Epoch {epoch} Batch {batch} Mean loss {self.loss_tracker.result()} Time per epoch: {(time.time() - start_time) / (epoch + 1)}s')
-                print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
-                # print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
-                self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
-                self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
-                self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())  
-            if self.__wandb:
-                wandb.log(
-                    {
-                        'lr': self._optimizer.learning_rate.numpy(),
-                        'epochs': epoch,
-                        'batch:': batch,
-                        'strike_loss': self._loss_tracker_t1.result(),
-                        'derivative_loss': self._loss_tracker_t2.result(),
-                        'steps_error_loss': self._loss_tracker_t3.result(),
-                        'overall_loss': self.loss_tracker.result(),
-                        # Overall derivatives
-                        'grads_magnitude': tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
-                        'analytical_grads': tf.reduce_mean(analytical_grads)
-                    }
-                )  
+        self.loss_tracker.update_state(loss_values)
+        # Monitor results
+        self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
+        self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
+        self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())  
+        if self.__wandb:
+            wandb.log(
+                {
+                    'lr': self._optimizer.learning_rate.numpy(),
+                    'epochs': epoch,
+                    'batch:': batch,
+                    'strike_loss': self._loss_tracker_t1.result(),
+                    'derivative_loss': self._loss_tracker_t2.result(),
+                    'steps_error_loss': self._loss_tracker_t3.result(),
+                    'overall_loss': self.loss_tracker.result(),
+                    # Overall derivatives
+                    'grads_magnitude': tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
+                    'analytical_grads': tf.reduce_mean(analytical_grads)
+                }
+            )  
         # Store losses
         return float(self.loss_tracker.result()), float(self._loss_tracker_t1.result()), float(self._loss_tracker_t2.result()), float(self._loss_tracker_t3.result())
    
@@ -304,6 +300,11 @@ class LgmSingleStep(tf.keras.Model):
         self._loss_tracker_t2.reset_states()
         self._loss_tracker_t3.reset_states()
         self.loss_tracker.reset_states()
+        
+    def plot_tracker_results(self, epoch: int):
+        print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
+        print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
+
     
     def get_losses_internal(self):
         """_summary_
@@ -355,18 +356,6 @@ class LgmSingleStep(tf.keras.Model):
         # T partial derivatives (for schema 3)
         self._t_grads = tf.reshape(grads['x'][:, 1], (batch_size, self.N))
         self._t_grads_prediction = grads['x'][:, 1]
-        # Verbose to output
-        if self._verbose:
-            log_file = 'logs/20230217/grads_model.log'
-            with open(log_file, 'a+') as f:
-                f.write(f'Grads given X:\n')
-                shape_x, shape_y = features.shape
-                for x_i in range(shape_x):
-                    for y_i in range(shape_y):
-                        f.write(f'{features[x_i, y_i]},')
-                    f.write(f'\n')
-        # Sanity purposes:
-        # print(f'Grads shape: {self._grads.shape}')
         return self._grads, self._grads_prediction, self._t_grads, self._t_grads_prediction
     
     def _get_dv_dxi(self, i, sample_idx = None):
