@@ -7,6 +7,10 @@ from scripts.model.lgm_naive_time_adjust import LgmSingleStepNaiveTimeAdjust
 # Simulator
 from scripts.utils.simulator.simulator import MCSimulation
 from scripts.utils.preprocess.preprocess import Preprocessor
+from scripts.utils.utils.utils import (
+    CyclicLR,
+    Utils
+)
 # Loss functions
 from scripts.losses.losses import Losses
 import numpy as np
@@ -15,8 +19,6 @@ import time
 # Wandb integration
 import wandb
 from wandb.keras import WandbCallback
-
-from scripts.utils.utils.utils import CyclicLR
 
 def simulate(
     T, 
@@ -103,9 +105,9 @@ def trainer(
             }
         )
     if TM is not None:
-        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}.h5'
+        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}.h5'
     else:
-        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize{normalize}_step_{T}_{nsims}_{N_steps}.h5'
+        model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize{normalize}_step_{T}_{nsims}_{N_steps}_epochs_{epochs}.h5'
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
@@ -120,7 +122,7 @@ def trainer(
         N_steps = N_steps, 
         dim = dim,
         sigma = sigma, 
-        nsims = nsims * 10 if simulate_in_epoch else nsims
+        nsims = min(10 * nsims, 100000) if simulate_in_epoch else nsims
     )
     mc_paths_tranformed_x0 = df_x[features].values
     x0 = mc_paths_tranformed_x0.astype(np.float64)
@@ -169,7 +171,7 @@ def trainer(
             normalize=normalize,
             data_sample=x0
         )
-    lgm_single_step.export_model_architecture()
+    # lgm_single_step.export_model_architecture()
     try:
         lgm_single_step.load_weights(model_name)
         return lgm_single_step
@@ -206,18 +208,20 @@ def trainer(
             delta_x = df_x.delta_x_0.values.astype(np.float64)
         print(f'{epoch}...', end = '')
         for batch in range(batches):
-            start_time = time.time()
+            Utils.print_progress_bar(
+                batch, 
+                batches, prefix='batches', suffix='|', length=50, fill='█'
+            )
             x_batch = x[batch * batch_size: (batch + 1) * batch_size, :]
             delta_x_batch = delta_x[batch * batch_size: (batch + 1) * batch_size]
             loss, _, _, _ = lgm_single_step.custom_train_step(
                 X = x_batch,
                 batch = batch,
                 epoch = epoch, 
-                start_time = start_time,
                 delta_x = delta_x_batch,
                 loss = Losses.loss_lgm
             )
-        if epoch % 10 == 0:
+        if epoch % 1 == 0:
             lgm_single_step.plot_tracker_results(epoch)
         epoch += 1
         # Reset error trackers

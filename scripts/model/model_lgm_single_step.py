@@ -11,6 +11,7 @@ import json
 # Imports
 import tensorflow as tf
 import numpy as np
+import time
 # From
 from tensorflow.keras.layers.experimental import preprocessing
 from tensorflow.keras import layers
@@ -233,7 +234,7 @@ class LgmSingleStep(tf.keras.Model):
     def learning_rate(self, learning_rate):
         self._optimizer.learning_rate.assign(learning_rate)
         
-    def custom_train_step(self, X, y = None, batch = 0, epoch = 0, start_time = None, delta_x = None, loss = None):
+    def custom_train_step(self, X, y = None, batch = 0, epoch = 0, delta_x = None, loss = None):
         """_summary_
 
         Args:
@@ -258,11 +259,9 @@ class LgmSingleStep(tf.keras.Model):
                 derivatives = self._get_dv_dxi(self.N - 1),  
                 predictions = predictions, 
                 N_steps = self.N,
-                verbose = self._verbose,
                 T = self.T,
                 TM = self.future_T,
-                phi = self.__phi,
-                mask_loss = self._mask_loss
+                phi = self.__phi
             )
         grads = tape.gradient(loss_values, self.model.trainable_weights)
         self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
@@ -275,7 +274,7 @@ class LgmSingleStep(tf.keras.Model):
         # Monitor results
         self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
         self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
-        self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())  
+        self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())
         if self.__wandb:
             wandb.log(
                 {

@@ -64,7 +64,7 @@ class TFUtils():
 class Utils():
     
     @staticmethod
-    def get_features_with_patter(df: pd.DataFrame, pattern: str, extra_cols: List[str]):
+    def get_features_with_pattern(df: pd.DataFrame, pattern: str, extra_cols: List[str]):
         features = []
         for column in df.columns.values:
             if column[0] == pattern:
@@ -74,6 +74,14 @@ class Utils():
         features += extra_cols
         
         return features
+    
+    @staticmethod
+    def print_progress_bar(iteration, total, prefix='', suffix='', length=50, fill='█'):
+        percent = ("{0:.1f}").format(100 * (iteration / float(total)))
+        filled_length = int(length * iteration // total)
+        bar = fill * filled_length + '-' * (length - filled_length)
+        sys.stdout.write(f'\r{prefix} |{bar}| {percent}% {suffix}')
+        sys.stdout.flush()
     
 class MathUtils():
     
@@ -373,7 +381,7 @@ class ZeroBond():
         return np.exp(-0.5 * ZeroBond.H(T) ** 2 * ct - ZeroBond.H(T) * xt)
     
     @staticmethod
-    @tf.function
+    # @tf.function
     def Z_normalized(xn, tn, T, ct):
         """_summary_
         Args:
@@ -407,6 +415,25 @@ class IRS():
         
     @staticmethod
     @tf.function
+    def IRS_normalized_np(
+        xn, 
+        T,
+        TN, 
+        ct, 
+        period = 6,
+        K = 0.03
+    ):
+        tau = TAUS[period]
+        time_add = TIMES[period]
+        num_times = np.float64((TN - T) / time_add)
+        variable = (1 - ZeroBond.Z(xn, T, TN, ct))
+        fixed = 0.
+        for i in range(1.0, num_times + 1):
+            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
+        fixed *= -tau * K
+        return variable + fixed
+    
+    @staticmethod
     def IRS_normalized(xn, 
             T,
             TN, 
@@ -416,8 +443,8 @@ class IRS():
         tau = TAUS[period]
         time_add = TIMES[period]
         # Internal parameter
-        first_val = np.float64(1.0)
-        num_times = (TN - T) / time_add
+        first_val = int(1.0)
+        num_times = int((TN - T) / time_add)
         variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
         fixed = tf.zeros(
             tf.shape(xn),
@@ -425,10 +452,109 @@ class IRS():
         )
         for i in range(first_val, num_times + 1):
             fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
-        fixed *= tau * K
+        fixed *= - tau * K
         # Normalize factor
         N = ZeroBond.N_tensor(T, xn, ct)
-        return variable + fixed / N
+        return (variable + fixed) / N
+    
+    # TODO: Adapt
+    @staticmethod
+    def IRS_test(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03,
+        sigma_value = 0.01,
+        predictions = None,
+        debug = False
+    ):
+        def integra_swap(xT, xnj, ct, cT):
+            par_swap = Swaption.positive_part_parswap(
+                xn = xT,
+                Ti = Ti,
+                Tm = Tm,
+                ct = cT,
+                period = period,
+                K = K
+            )
+            density_normal = Swaption.density_normal(
+                xT,
+                xnj,
+                ct = ct,
+                cT = cT
+            )
+            anuality_term = Swaption.anuality_swap(
+                xT,
+                Ti,
+                Tm,
+                cT,
+                period
+            )
+            return (par_swap * anuality_term * density_normal) / ZeroBond.N(Ti, xT, cT)
+            
+        import scipy.integrate as integrate
+        ct_dict = dict()
+        ts_unique = np.unique(t)
+        for t_unique in ts_unique:
+            ct_dict[t_unique] = FinanceUtils.C(
+                t_unique,
+                sigma_value
+            )
+        cT = FinanceUtils.C(
+            Ti,
+            sigma_value
+        )    
+        swaption_results = []
+        # TODO: Clean
+        if debug == True:
+            i = (t == 0)
+            prediction = np.float64(predictions[i][0])
+            xni = np.float64(xn[i][0])
+            ct = np.float64(ct[i][0])
+            integrate_swap = integrate.fixed_quad(
+                        integra_swap, 
+                        xni - 6 * np.sqrt((cT - ct)), 
+                        xni + 6 * np.sqrt((cT - ct)), 
+                        n = 1000,
+                        args = (
+                            xni,
+                            ct,
+                            cT    
+                        )
+                    ) 
+            xni = tf.constant([xni], dtype = tf.float64)
+            Ti = np.float64(Ti)
+            Tm = np.float64(Tm)
+            v_zero = Swaption.Swaption_at_zero(
+                cT,
+                Ti,
+                Tm,
+                period = period,
+                K = K
+            )
+            print(f'Prediction: {prediction}')
+            print(f'Integrate swap: {integrate_swap}')
+            print(f'Analytical result: {v_zero}')
+            sys.exit(0)
+        for i, _ in enumerate(t):
+            xni = xn[i]
+            cti = ct[i]
+            swaption_results.append(
+                integrate.fixed_quad(
+                    integra_swap, 
+                    xni - 6 * np.sqrt((cT - cti)), 
+                    xni + 6 * np.sqrt((cT - cti)), 
+                    args = (
+                        xni,
+                        cti,
+                        cT    
+                    ))[0]    
+            )
+        return swaption_results  
+    
 class Swaption():
     
     @staticmethod
@@ -650,7 +776,6 @@ class Swaption():
 
     
     @staticmethod
-    @tf.function
     def Swaption(xn, 
             T,
             TN, 
@@ -690,7 +815,6 @@ class Swaption():
         return tf.reduce_max(tensor_irs, axis = 1)
         
     @staticmethod
-    @tf.function
     def Swaption_normalized(xn, 
             T,
             TN, 

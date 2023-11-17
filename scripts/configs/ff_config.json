@@ -2,69 +2,69 @@
     "zerobond":{
         "1":{
             "layers": 6,
-            "hidden_units": 6
+            "hidden_units": 64
         },
         "2":{
-            "layers": 2,
+            "layers": 6,
             "hidden_units": 64
         },
         "3":{
-            "layers": 2,
+            "layers": 6,
             "hidden_units": 64
         },
         "4":{
-            "layers": 2,
+            "layers": 6,
             "hidden_units": 64
         },
         "5":{
-            "layers": 2,
+            "layers": 6,
             "hidden_units": 64
         },
         "6":{
             "layers": 6,
-            "hidden_units": 8
+            "hidden_units": 64
         },
         "7":{
             "layers": 6,
-            "hidden_units": 8
+            "hidden_units": 64
         },
         "8":{
             "layers": 6,
-            "hidden_units": 8
+            "hidden_units": 64
         }
     },
     "irs":{
         "1":{
             "layers": 6,
-            "hidden_units": 16
+            "hidden_units": 64
         },
         "2":{
-            "layers": 8,
-            "hidden_units": 16
+            "layers": 6,
+            "hidden_units": 64
         },
         "3":{
-            "layers": 10,
-            "hidden_units": 16
+            "layers": 6,
+            "hidden_units": 64
         },
         "4":{
-            "layers": 12,
-            "hidden_units": 16
+            "layers": 6,
+            "hidden_units": 64
         },
         "5":{
-            "layers": 14,
-            "hidden_units": 16
+            "layers": 6,
+            "hidden_units": 64
         },
         "6":{
-            "layers": 16,
-            "hidden_units": 16
+            "layers": 6,
+            "hidden_units": 64
         },
         "7":{
-            "layers": 18,
-            "hidden_units": 16
+            "layers": 6,
+            "hidden_units": 64
         },
         "8":{
-            "layers": 24,
-            "hidden_units": 16
+            "layers": 6,
+            "hidden_units": 64
         }
     },
     "swaption":{

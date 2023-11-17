@@ -153,7 +153,7 @@ if __name__ == '__main__':
         test_name_file = f'data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_dim_{dim}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
         # TODO: Remove from here
         train_name_file = f'data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_dim_{dim}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
-        test_sims = int(nsims * 0.2)
+        test_sims = min(int(nsims * 0.001), 10000)
         mcsimulator = MCSimulation(
             T = T,  
             X0 = X0, 
@@ -180,7 +180,7 @@ if __name__ == '__main__':
                 mc_paths_test,
                 test_sims
             )
-        features = Utils.get_features_with_patter(
+        features = Utils.get_features_with_pattern(
             df = df_x_test, 
             pattern = "X",
             extra_cols = ["dt"]
