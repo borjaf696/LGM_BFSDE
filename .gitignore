@@ -165,7 +165,7 @@ cython_debug/
 
 # Avoid logs
 *.log
-
+*.out
 # Avoid histories
 .RData
 .Rhistory
@@ -183,3 +183,5 @@ wandb/*
 
 # Avoid models
 *.h5
+
+

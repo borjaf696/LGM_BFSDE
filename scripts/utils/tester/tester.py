@@ -128,13 +128,14 @@ class ZeroBondTester(Tester):
         
 class IRSTester(Tester):
     
-    def test(self, df, model, test_name_file, sigma_value, TM = None, T = None, report_to_wandb = False):
+    def test(self, df, model, test_name_file, sigma_value, features= None, TM = None, T = None, report_to_wandb = False):
         assert test_name_file is not None, 'Test name file is not provided'
         
         df = super()._calculate_basics(
             df, 
             model, 
-            sigma_value
+            sigma_value,
+            features = features
         )
         print(f'Please provide the IRS analytical formula')
         
