@@ -392,10 +392,78 @@ class ZeroBond():
             _type_: _description_
         """
         return tf.math.multiply(ZeroBond.Z_tensor(xn, tn, T, ct), 1/ ZeroBond.N_tensor(tn, xn, ct))
+    
+class Swap():
+    @staticmethod
+    def anuality_swap(
+        xn, 
+        T,
+        TN, 
+        ct, 
+        period = 6,  
+    ):
+        # Anuality params
+        tau = TAUS[period]
+        time_add = TIMES[period]
+        num_times = int(np.float64((TN - T) / time_add))
+        fixed = 0
+        for i in range(1, num_times + 1):
+            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
+        return tau * fixed
+    
+    @staticmethod
+    def par_swap(
+        xn,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+    ):  
+        pi = ZeroBond.Z(xn, Ti, Ti, ct)
+        pm = ZeroBond.Z(xn, Ti, Tm, ct)
+        # For anuality we only require last Zeta_t
+        fixed = Swap.anuality_swap(
+            xn,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+        return (pi - pm) / (fixed)
+    
+    @staticmethod
+    def positive_part_parswap(
+        xn,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03
+    ):
+        par_swap = Swap.par_swap(
+            xn,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+        return np.maximum(0, par_swap - K)
+    
+    @staticmethod
+    def density_normal(
+        xT,
+        xn,
+        ct,
+        cT
+    ):
+        mu = xn
+        std = np.sqrt(cT - ct)
+        p = norm.pdf(xT, mu, std)
+        return p
+    
 
 class IRS():
     @staticmethod
-    @tf.function
     def IRS(xn, 
             T,
             TN, 
@@ -414,7 +482,6 @@ class IRS():
         return variable + fixed
         
     @staticmethod
-    @tf.function
     def IRS_normalized_np(
         xn, 
         T,
@@ -472,21 +539,20 @@ class IRS():
         debug = False
     ):
         def integra_swap(xT, xnj, ct, cT):
-            par_swap = Swaption.positive_part_parswap(
+            par_swap = Swap.par_swap(
                 xn = xT,
                 Ti = Ti,
                 Tm = Tm,
                 ct = cT,
-                period = period,
-                K = K
-            )
-            density_normal = Swaption.density_normal(
+                period = period
+            ) - K
+            density_normal = Swap.density_normal(
                 xT,
                 xnj,
                 ct = ct,
                 cT = cT
             )
-            anuality_term = Swaption.anuality_swap(
+            anuality_term = Swap.anuality_swap(
                 xT,
                 Ti,
                 Tm,
@@ -556,73 +622,6 @@ class IRS():
         return swaption_results  
     
 class Swaption():
-    
-    @staticmethod
-    def anuality_swap(
-        xn, 
-        T,
-        TN, 
-        ct, 
-        period = 6,  
-    ):
-        # Anuality params
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        num_times = int(np.float64((TN - T) / time_add))
-        fixed = 0
-        for i in range(1, num_times + 1):
-            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
-        return tau * fixed
-    
-    @staticmethod
-    def par_swap(
-        xn,
-        Ti,
-        Tm,
-        ct,
-        period = 6,
-    ):  
-        pi = ZeroBond.Z(xn, Ti, Ti, ct)
-        pm = ZeroBond.Z(xn, Ti, Tm, ct)
-        # For anuality we only require last Zeta_t
-        fixed = Swaption.anuality_swap(
-            xn,
-            Ti,
-            Tm,
-            ct,
-            period
-        )
-        return (pi - pm) / (fixed)
-    
-    @staticmethod
-    def positive_part_parswap(
-        xn,
-        Ti,
-        Tm,
-        ct,
-        period = 6,
-        K = 0.03
-    ):
-        par_swap = Swaption.par_swap(
-            xn,
-            Ti,
-            Tm,
-            ct,
-            period
-        )
-        return np.maximum(0, par_swap - K)
-    
-    @staticmethod
-    def density_normal(
-        xT,
-        xn,
-        ct,
-        cT
-    ):
-        mu = xn
-        std = np.sqrt(cT - ct)
-        p = norm.pdf(xT, mu, std)
-        return p
     
     @staticmethod
     def Swaption_test(
