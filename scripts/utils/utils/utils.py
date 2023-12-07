@@ -167,6 +167,7 @@ class MathUtils():
         gradient = tf.convert_to_tensor(gradient,
                                             dtype = tf.float64)
         return gradient
+
 class MLUtils():
     import pandas as pd
     from sklearn.base import BaseEstimator, TransformerMixin
@@ -473,13 +474,18 @@ class IRS():
         tau = TAUS[period]
         time_add = TIMES[period]
         # Internal parameter
-        num_times = np.float64((TN - T) / time_add)
+        first_val = int(1.0)
+        num_times = int((TN - T) / time_add)
         variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
-        fixed = 0.
-        for i in range(1.0, num_times + 1):
-            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
-        fixed *= tau * K
-        return variable + fixed
+        fixed = tf.zeros(
+            tf.shape(xn),
+            dtype = tf.float64
+        )
+        for i in range(first_val, num_times + 1):
+            fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
+        fixed *= - tau * K
+        N = ZeroBond.N_tensor(T, xn, ct)
+        return N * (variable + fixed)
         
     @staticmethod
     def IRS_normalized_np(
@@ -507,22 +513,11 @@ class IRS():
             ct, 
             period = 6,
             K = 0.03):
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        # Internal parameter
-        first_val = int(1.0)
-        num_times = int((TN - T) / time_add)
-        variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
-        fixed = tf.zeros(
-            tf.shape(xn),
-            dtype = tf.float64
-        )
-        for i in range(first_val, num_times + 1):
-            fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
-        fixed *= - tau * K
+        # Calculate IRS
+        irs = IRS.IRS(xn, T, TN, ct, period, K)
         # Normalize factor
         N = ZeroBond.N_tensor(T, xn, ct)
-        return (variable + fixed) / N
+        return irs / N
     
     # TODO: Adapt
     @staticmethod
@@ -538,88 +533,20 @@ class IRS():
         predictions = None,
         debug = False
     ):
-        def integra_swap(xT, xnj, ct, cT):
-            par_swap = Swap.par_swap(
-                xn = xT,
-                Ti = Ti,
-                Tm = Tm,
-                ct = cT,
-                period = period
-            ) - K
-            density_normal = Swap.density_normal(
-                xT,
-                xnj,
-                ct = ct,
-                cT = cT
-            )
-            anuality_term = Swap.anuality_swap(
-                xT,
-                Ti,
-                Tm,
-                cT,
-                period
-            )
-            return (par_swap * anuality_term * density_normal) / ZeroBond.N(Ti, xT, cT)
-            
-        import scipy.integrate as integrate
-        ct_dict = dict()
-        ts_unique = np.unique(t)
-        for t_unique in ts_unique:
-            ct_dict[t_unique] = FinanceUtils.C(
-                t_unique,
-                sigma_value
-            )
-        cT = FinanceUtils.C(
+        # A_{i,m}
+        anuality_term = Swap.anuality_swap(
+            xn,
             Ti,
-            sigma_value
-        )    
-        swaption_results = []
-        # TODO: Clean
-        if debug == True:
-            i = (t == 0)
-            prediction = np.float64(predictions[i][0])
-            xni = np.float64(xn[i][0])
-            ct = np.float64(ct[i][0])
-            integrate_swap = integrate.fixed_quad(
-                        integra_swap, 
-                        xni - 6 * np.sqrt((cT - ct)), 
-                        xni + 6 * np.sqrt((cT - ct)), 
-                        n = 1000,
-                        args = (
-                            xni,
-                            ct,
-                            cT    
-                        )
-                    ) 
-            xni = tf.constant([xni], dtype = tf.float64)
-            Ti = np.float64(Ti)
-            Tm = np.float64(Tm)
-            v_zero = Swaption.Swaption_at_zero(
-                cT,
-                Ti,
-                Tm,
-                period = period,
-                K = K
-            )
-            print(f'Prediction: {prediction}')
-            print(f'Integrate swap: {integrate_swap}')
-            print(f'Analytical result: {v_zero}')
-            sys.exit(0)
-        for i, _ in enumerate(t):
-            xni = xn[i]
-            cti = ct[i]
-            swaption_results.append(
-                integrate.fixed_quad(
-                    integra_swap, 
-                    xni - 6 * np.sqrt((cT - cti)), 
-                    xni + 6 * np.sqrt((cT - cti)), 
-                    args = (
-                        xni,
-                        cti,
-                        cT    
-                    ))[0]    
-            )
-        return swaption_results  
+            Tm,
+            ct,
+            period
+        )
+        # Variable leg
+        variable_leg = (ZeroBond.Z(xn, t, Tm, ct) - ZeroBond.Z(xn, Ti, Tm, ct))
+        # Numeraire
+        N = ZeroBond.N_tensor(t, xn, ct)
+        # Compose the IRS result
+        return N*anuality_term*(variable_leg - K)
     
 class Swaption():
     
