@@ -66,7 +66,7 @@ def parse_args():
 def get_phi(active):
     phi = None
     if active == 'zerobond':
-        phi = ZeroBond.Z_normalized
+        phi = ZeroBond.Z_strike_normalized
     elif active == 'irs':
         phi = IRS.IRS_normalized
     elif active == 'swaption':

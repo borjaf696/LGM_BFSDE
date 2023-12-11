@@ -22,6 +22,8 @@ TIMES = {
     12:1.0
 }
 
+# TODO: Change the IRS/Zerobond/Swaption to products
+
 # Cyclic learning rate with decay
 class CyclicLR(tf.keras.optimizers.schedules.LearningRateSchedule):
     def __init__(self, base_lr, max_lr, step_size, decay=1., mode='triangular'):
@@ -395,6 +397,18 @@ class ZeroBond():
         """
         return tf.math.multiply(ZeroBond.Z_tensor(xn, tn, T, ct), 1/ ZeroBond.N_tensor(tn, xn, ct))
     
+    @staticmethod
+    def Z_strike_normalized(xn, T, Tm, ct, period = None, K = None):
+        """_summary_
+        Args:
+            xn (_type_): _description_
+            n (_type_): _description_
+            ct (_type_): _description_
+        Returns:
+            _type_: _description_
+        """
+        return tf.math.multiply(ZeroBond.Z_tensor(xn, T, T, ct), 1/ ZeroBond.N_tensor(T, xn, ct))
+    
 class Swap():
     @staticmethod
     def anuality_swap(
@@ -512,21 +526,20 @@ class IRS():
             ct, 
             period = 6,
             K = 0.03):
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        # Internal parameter
-        first_val = int(1.0)
-        num_times = int((TN - T) / time_add)
-        variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
-        fixed = tf.zeros(
-            tf.shape(xn),
-            dtype = tf.float64
+        # A(i,m)
+        anuality_term = Swap.anuality_swap(
+            xn,
+            T,
+            TN,
+            ct,
+            period
         )
-        for i in range(first_val, num_times + 1):
-            fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
-        fixed *= - tau * K
+        # Par Swap
+        par_swap = Swap.par_swap(xn, T, T, TN, ct, period)
+        # Numeraire
         N = ZeroBond.N_tensor(T, xn, ct)
-        return N * (variable + fixed)
+        # Compose the IRS result
+        return N * anuality_term*(par_swap - K)
         
     @staticmethod
     def IRS_normalized_np(
@@ -551,7 +564,7 @@ class IRS():
     def IRS_normalized(
         xn, 
         T,
-        TN, 
+        Tm, 
         ct, 
         period = 6,
         K = 0.03
@@ -560,12 +573,12 @@ class IRS():
         anuality_term = Swap.anuality_swap(
             xn,
             T,
-            TN,
+            Tm,
             ct,
             period
         )
         # Par Swap
-        par_swap = Swap.par_swap(xn, T, T, TN, ct, period)
+        par_swap = Swap.par_swap(xn, T, T, Tm, ct, period)
         # Numeraire
         N = ZeroBond.N_tensor(T, xn, ct)
         # Compose the IRS result
