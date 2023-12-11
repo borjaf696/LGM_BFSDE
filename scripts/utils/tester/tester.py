@@ -137,7 +137,15 @@ class IRSTester(Tester):
             sigma_value,
             features = features
         )
-        print(f'Please provide the IRS analytical formula')
+        df['V'] = IRS.IRS_test(
+            xn = df.X_0.values.astype(np.float64),
+            t = df.dt.values.astype(np.float64),
+            Ti = T,
+            Tm = TM,
+            ct = df.ct.values.astype(np.float64),
+            sigma_value = sigma_value,
+            predictions = df.lgm_single_step_V.values.astype(np.float64)
+        )
         
         folder = '/'.join(
             test_name_file.split('/')[:-1]
@@ -171,16 +179,6 @@ class SwaptionTester(Tester):
             sigma_value = sigma_value,
             predictions = df.lgm_single_step_V.values.astype(np.float64)
         )
-        '''df['V_normalized_001'] = df.apply(
-            lambda x:
-                Swaption.Swaption_test(
-                    0.01,
-                    Ti = x['dt'],
-                    Tm = TM,  
-                    x.ct
-                ),
-                axis = 1
-        )'''
         
         folder = '/'.join(
             test_name_file.split('/')[:-1]

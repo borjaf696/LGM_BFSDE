@@ -8,7 +8,8 @@ from typing import (
     List,
     Dict
 )
-
+import matplotlib.pyplot as plt
+import seaborn as sns
 # Constants
 TAUS = {
     3: 0.25,
@@ -167,6 +168,7 @@ class MathUtils():
         gradient = tf.convert_to_tensor(gradient,
                                             dtype = tf.float64)
         return gradient
+
 class MLUtils():
     import pandas as pd
     from sklearn.base import BaseEstimator, TransformerMixin
@@ -392,10 +394,118 @@ class ZeroBond():
             _type_: _description_
         """
         return tf.math.multiply(ZeroBond.Z_tensor(xn, tn, T, ct), 1/ ZeroBond.N_tensor(tn, xn, ct))
+    
+class Swap():
+    @staticmethod
+    def anuality_swap(
+        xn, 
+        T,
+        TN, 
+        ct, 
+        period = 6,  
+    ):
+        # Anuality params
+        tau = TAUS[period]
+        time_add = TIMES[period]
+        num_times = int(np.float64((TN - T) / time_add))
+        fixed = 0
+        for i in range(1, num_times + 1):
+            fixed += ZeroBond.Z_normalized(xn, T, T + i * time_add, ct)
+        return tau * fixed
+    
+    @staticmethod
+    def par_swap(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+    ):  
+        pi = ZeroBond.Z_normalized(xn, t, Ti, ct)
+        pm = ZeroBond.Z_normalized(xn, Ti, Tm, ct)
+        # For anuality we only require last Zeta_t
+        fixed = Swap.anuality_swap(
+            xn,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+        return (pi - pm) / (fixed)
+    
+    @staticmethod
+    def positive_par_parswap(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03
+    ):
+        par_swap = Swap.par_swap(
+            xn,
+            t,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+        return np.maximum(0, par_swap - K)
+    
+    @staticmethod
+    def positive_par_parswap_tf(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03
+    ):
+        # Calculate par swap
+        par_swap = Swap.par_swap(
+            xn,
+            t,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+        # Concat zero mask for reduce max
+        zero_mask = tf.zeros(
+            (par_swap.shape[0], 1), 
+            dtype = par_swap.dtype
+        )
+        par_swap = tf.reshape(
+            par_swap,
+            (par_swap.shape[0], 1)
+        )
+        swap = tf.concat(
+            [
+                par_swap,
+                zero_mask
+            ],
+            axis = 1
+        )
+        return tf.reduce_max(swap - K, axis = 1)
+    
+    @staticmethod
+    def density_normal(
+        xT,
+        xn,
+        ct,
+        cT
+    ):
+        mu = xn
+        std = np.sqrt(cT - ct)
+        p = norm.pdf(xT, mu, std)
+        return p
+    
 
 class IRS():
     @staticmethod
-    @tf.function
     def IRS(xn, 
             T,
             TN, 
@@ -405,16 +515,20 @@ class IRS():
         tau = TAUS[period]
         time_add = TIMES[period]
         # Internal parameter
-        num_times = np.float64((TN - T) / time_add)
+        first_val = int(1.0)
+        num_times = int((TN - T) / time_add)
         variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
-        fixed = 0.
-        for i in range(1.0, num_times + 1):
-            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
-        fixed *= tau * K
-        return variable + fixed
+        fixed = tf.zeros(
+            tf.shape(xn),
+            dtype = tf.float64
+        )
+        for i in range(first_val, num_times + 1):
+            fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
+        fixed *= - tau * K
+        N = ZeroBond.N_tensor(T, xn, ct)
+        return N * (variable + fixed)
         
     @staticmethod
-    @tf.function
     def IRS_normalized_np(
         xn, 
         T,
@@ -434,28 +548,53 @@ class IRS():
         return variable + fixed
     
     @staticmethod
-    def IRS_normalized(xn, 
+    def IRS_normalized(
+        xn, 
+        T,
+        TN, 
+        ct, 
+        period = 6,
+        K = 0.03
+    ):
+        # A(i,m)
+        anuality_term = Swap.anuality_swap(
+            xn,
             T,
-            TN, 
-            ct, 
-            period = 6,
-            K = 0.03):
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        # Internal parameter
-        first_val = int(1.0)
-        num_times = int((TN - T) / time_add)
-        variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
-        fixed = tf.zeros(
-            tf.shape(xn),
-            dtype = tf.float64
+            TN,
+            ct,
+            period
         )
-        for i in range(first_val, num_times + 1):
-            fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
-        fixed *= - tau * K
-        # Normalize factor
+        # Par Swap
+        par_swap = Swap.par_swap(xn, T, T, TN, ct, period)
+        # Numeraire
         N = ZeroBond.N_tensor(T, xn, ct)
-        return (variable + fixed) / N
+        # Compose the IRS result
+        return N * anuality_term*(par_swap - K) / N
+    
+    @staticmethod
+    def IRS_test_normalized(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03
+    ):
+        # A(i,m)
+        anuality_term = Swap.anuality_swap(
+            xn,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+        # Par Swap
+        par_swap = Swap.par_swap(xn, t, Ti, Tm, ct, period)
+        # Numeraire
+        N = ZeroBond.N_tensor(t, xn, ct)
+        # Compose the IRS result
+        return N * anuality_term*(par_swap - K) / N
     
     # TODO: Adapt
     @staticmethod
@@ -466,163 +605,24 @@ class IRS():
         Tm,
         ct,
         period = 6,
-        K = 0.03,
-        sigma_value = 0.01,
-        predictions = None,
-        debug = False
-    ):
-        def integra_swap(xT, xnj, ct, cT):
-            par_swap = Swaption.positive_part_parswap(
-                xn = xT,
-                Ti = Ti,
-                Tm = Tm,
-                ct = cT,
-                period = period,
-                K = K
-            )
-            density_normal = Swaption.density_normal(
-                xT,
-                xnj,
-                ct = ct,
-                cT = cT
-            )
-            anuality_term = Swaption.anuality_swap(
-                xT,
-                Ti,
-                Tm,
-                cT,
-                period
-            )
-            return (par_swap * anuality_term * density_normal) / ZeroBond.N(Ti, xT, cT)
-            
-        import scipy.integrate as integrate
-        ct_dict = dict()
-        ts_unique = np.unique(t)
-        for t_unique in ts_unique:
-            ct_dict[t_unique] = FinanceUtils.C(
-                t_unique,
-                sigma_value
-            )
-        cT = FinanceUtils.C(
-            Ti,
-            sigma_value
-        )    
-        swaption_results = []
-        # TODO: Clean
-        if debug == True:
-            i = (t == 0)
-            prediction = np.float64(predictions[i][0])
-            xni = np.float64(xn[i][0])
-            ct = np.float64(ct[i][0])
-            integrate_swap = integrate.fixed_quad(
-                        integra_swap, 
-                        xni - 6 * np.sqrt((cT - ct)), 
-                        xni + 6 * np.sqrt((cT - ct)), 
-                        n = 1000,
-                        args = (
-                            xni,
-                            ct,
-                            cT    
-                        )
-                    ) 
-            xni = tf.constant([xni], dtype = tf.float64)
-            Ti = np.float64(Ti)
-            Tm = np.float64(Tm)
-            v_zero = Swaption.Swaption_at_zero(
-                cT,
-                Ti,
-                Tm,
-                period = period,
-                K = K
-            )
-            print(f'Prediction: {prediction}')
-            print(f'Integrate swap: {integrate_swap}')
-            print(f'Analytical result: {v_zero}')
-            sys.exit(0)
-        for i, _ in enumerate(t):
-            xni = xn[i]
-            cti = ct[i]
-            swaption_results.append(
-                integrate.fixed_quad(
-                    integra_swap, 
-                    xni - 6 * np.sqrt((cT - cti)), 
-                    xni + 6 * np.sqrt((cT - cti)), 
-                    args = (
-                        xni,
-                        cti,
-                        cT    
-                    ))[0]    
-            )
-        return swaption_results  
-    
-class Swaption():
-    
-    @staticmethod
-    def anuality_swap(
-        xn, 
-        T,
-        TN, 
-        ct, 
-        period = 6,  
-    ):
-        # Anuality params
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        num_times = int(np.float64((TN - T) / time_add))
-        fixed = 0
-        for i in range(1, num_times + 1):
-            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
-        return tau * fixed
-    
-    @staticmethod
-    def par_swap(
-        xn,
-        Ti,
-        Tm,
-        ct,
-        period = 6,
-    ):  
-        pi = ZeroBond.Z(xn, Ti, Ti, ct)
-        pm = ZeroBond.Z(xn, Ti, Tm, ct)
-        # For anuality we only require last Zeta_t
-        fixed = Swaption.anuality_swap(
-            xn,
-            Ti,
-            Tm,
-            ct,
-            period
-        )
-        return (pi - pm) / (fixed)
-    
-    @staticmethod
-    def positive_part_parswap(
-        xn,
-        Ti,
-        Tm,
-        ct,
-        period = 6,
         K = 0.03
     ):
-        par_swap = Swaption.par_swap(
+        # A(i,m)
+        anuality_term = Swap.anuality_swap(
             xn,
             Ti,
             Tm,
             ct,
             period
         )
-        return np.maximum(0, par_swap - K)
+        # Par Swap
+        par_swap = Swap.par_swap(xn, t, Ti, Tm, ct, period)
+        # Numeraire
+        N = ZeroBond.N_tensor(t, xn, ct)
+        # Compose the IRS result
+        return N * anuality_term*(par_swap - K)
     
-    @staticmethod
-    def density_normal(
-        xT,
-        xn,
-        ct,
-        cT
-    ):
-        mu = xn
-        std = np.sqrt(cT - ct)
-        p = norm.pdf(xT, mu, std)
-        return p
+class Swaption():
     
     @staticmethod
     def Swaption_test(
@@ -632,94 +632,28 @@ class Swaption():
         Tm,
         ct,
         period = 6,
-        K = 0.03,
-        sigma_value = 0.01,
-        predictions = None,
-        debug = False
+        K = 0.03
     ):
-        def integra_swap(xT, xnj, ct, cT):
-            par_swap = Swaption.positive_part_parswap(
-                xn = xT,
-                Ti = Ti,
-                Tm = Tm,
-                ct = cT,
-                period = period,
-                K = K
-            )
-            density_normal = Swaption.density_normal(
-                xT,
-                xnj,
-                ct = ct,
-                cT = cT
-            )
-            anuality_term = Swaption.anuality_swap(
-                xT,
-                Ti,
-                Tm,
-                cT,
-                period
-            )
-            return (par_swap * anuality_term * density_normal) / ZeroBond.N(Ti, xT, cT)
-            
-        import scipy.integrate as integrate
-        ct_dict = dict()
-        ts_unique = np.unique(t)
-        for t_unique in ts_unique:
-            ct_dict[t_unique] = FinanceUtils.C(
-                t_unique,
-                sigma_value
-            )
-        cT = FinanceUtils.C(
-            Ti,
-            sigma_value
-        )    
-        swaption_results = []
-        # TODO: Clean
-        if debug == True:
-            i = (t == 0)
-            prediction = np.float64(predictions[i][0])
-            xni = np.float64(xn[i][0])
-            ct = np.float64(ct[i][0])
-            integrate_swap = integrate.fixed_quad(
-                        integra_swap, 
-                        xni - 6 * np.sqrt((cT - ct)), 
-                        xni + 6 * np.sqrt((cT - ct)), 
-                        n = 1000,
-                        args = (
-                            xni,
-                            ct,
-                            cT    
-                        )
-                    ) 
-            xni = tf.constant([xni], dtype = tf.float64)
-            Ti = np.float64(Ti)
-            Tm = np.float64(Tm)
-            v_zero = Swaption.Swaption_at_zero(
-                cT,
-                Ti,
-                Tm,
-                period = period,
-                K = K
-            )
-            print(f'Prediction: {prediction}')
-            print(f'Integrate swap: {integrate_swap}')
-            print(f'Analytical result: {v_zero}')
-            sys.exit(0)
-        for i, _ in enumerate(t):
-            xni = xn[i]
-            cti = ct[i]
-            swaption_results.append(
-                integrate.fixed_quad(
-                    integra_swap, 
-                    xni - 6 * np.sqrt((cT - cti)), 
-                    xni + 6 * np.sqrt((cT - cti)), 
-                    args = (
-                        xni,
-                        cti,
-                        cT    
-                    ))[0]    
-            )
-        return swaption_results  
+        # A(i,m)
+        anuality_term = Swap.anuality_swap(xn,Ti,Tm,ct,period)
+        # Variable leg
+        par_swap = Swap.positive_par_parswap_tf(xn, t, Ti, Tm, ct, period, K)
+        # Numeraire
+        N = ZeroBond.N_tensor(t, xn, ct)
+        return N*anuality_term*par_swap
+
+    @staticmethod
+    def Swaption_test_normalized(
+        xn,
+        t,
+        Ti,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03
+    ):
+        N = ZeroBond.N_tensor(t, xn, ct)
+        return Swaption.Swaption_test(xn, t, Ti, Tm, ct, period, K) / N
     
     @staticmethod
     def Swaption_at_zero(
@@ -776,83 +710,27 @@ class Swaption():
 
     
     @staticmethod
-    def Swaption(xn, 
-            T,
-            TN, 
-            ct, 
-            period = 6,
-            K = 0.03):
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        # Internal parameter
-        first_val = np.float64(1.0)
-        num_times = (TN - T) / time_add
-        variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
-        fixed = tf.zeros(
-            tf.shape(xn),
-            dtype = tf.float64
-        )
-        for i in range(first_val, num_times + 1):
-            fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
-        fixed *= - tau * K
-        # Fix shape for swaption
-        tensor_irs = tf.reshape(
-            (variable + fixed),
-            (variable.shape[0], 1)
-        )
-        zero_mask = tf.zeros(
-            (tensor_irs.shape[0], 1), 
-            dtype = tensor_irs.dtype
-        )
-        tensor_irs = tf.concat(
-            [
-                tensor_irs,
-                zero_mask
-            ],
-            axis = 1
-        )
-        
-        return tf.reduce_max(tensor_irs, axis = 1)
+    def Swaption(
+        xn,
+        T,
+        Tm,
+        ct,
+        period = 6,
+        K = 0.03
+    ):
+        return Swaption.Swaption_test(xn, T, T, Tm, ct, period, K)
         
     @staticmethod
-    def Swaption_normalized(xn, 
-            T,
-            TN, 
-            ct, 
-            period = 6,
-            K = 0.03):
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        # Internal parameter
-        first_val = np.float64(1.0)
-        num_times = (TN - T) / time_add
-        variable = (1 - ZeroBond.Z_tensor(xn, T, TN, ct))
-        fixed = tf.zeros(
-            tf.shape(xn),
-            dtype = tf.float64
-        )
-        for i in range(first_val, num_times + 1):
-            fixed += ZeroBond.Z_tensor(xn, T, T + i * time_add, ct)
-        fixed *= - tau * K
-        # Normalize factor
+    def Swaption_normalized(
+        xn, 
+        T,
+        Tm, 
+        ct, 
+        period = 6,
+        K = 0.03
+    ):
         N = ZeroBond.N_tensor(T, xn, ct)
-        # Fix shape for swaption
-        tensor_irs = tf.reshape(
-            (variable + fixed),
-            (variable.shape[0], 1)
-        )
-        zero_mask = tf.zeros(
-            (tensor_irs.shape[0], 1), 
-            dtype = tensor_irs.dtype
-        )
-        tensor_irs = tf.concat(
-            [
-                tensor_irs,
-                zero_mask
-            ],
-            axis = 1
-        )
-        return tf.reduce_max(tensor_irs, axis = 1) / N
+        return Swaption.Swaption_test(xn, T, T, Tm, ct, period, K) / N
     
 class TestExamples():
     
@@ -866,3 +744,53 @@ class TestExamples():
     @staticmethod
     def strike_value(x: tf.Tensor):
         return tf.linalg.norm(x)
+    
+class VisualizationHelper():
+    @staticmethod
+    def plot_time_series(df, x, value_column, title='Results', xlabel='Xt', ylabel='Y'):
+        """
+        Grafica una serie de tiempo usando seaborn y matplotlib.
+
+        :param df: DataFrame de Pandas que contiene la serie de tiempo.
+        :param date_column: Nombre de la columna en df que contiene las fechas.
+        :param value_column: Nombre de la columna en df que contiene los valores.
+        :param title: Título del gráfico.
+        :param xlabel: Etiqueta del eje X.
+        :param ylabel: Etiqueta del eje Y.
+        """
+        sns.set(style="darkgrid")
+
+        plt.figure(figsize=(6, 6))
+        sns.lineplot(data=df, x=x, y=value_column)
+        plt.title(title)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+
+        # Mostrar el gráfico
+        plt.show()
+        
+    @staticmethod
+    def plot_multiple_series(df, x, values_column, title='Results', xlabel='Xt', ylabel='Y'):
+        """
+        Grafica una serie de tiempo usando seaborn y matplotlib.
+
+        :param df: DataFrame de Pandas que contiene la serie de tiempo.
+        :param date_column: Nombre de la columna en df que contiene las fechas.
+        :param value_column: Nombre de la columna en df que contiene los valores.
+        :param title: Título del gráfico.
+        :param xlabel: Etiqueta del eje X.
+        :param ylabel: Etiqueta del eje Y.
+        """
+        sns.set(style="darkgrid")
+
+        plt.figure(figsize=(6, 6))
+        for y in values_column:
+            sns.lineplot(data=df, x=x, y=y, label=y)
+        plt.title(title)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.legend()
+
+        # Mostrar el gráfico
+        plt.show()
+        

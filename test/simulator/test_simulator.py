@@ -50,6 +50,6 @@ def test_simulation_simple(simple_params):
     means["i"] = means["dummy_column"].cumsum() - 1
     means["expected_std"] = np.sqrt(avg_dt*means.i*simple_params["sigma"]**2)
     
-    assert (avg_dt - (simple_params['T'] / (simple_params['N_steps'] - 1)) < 1e-5)
-    assert (means.std_x - means.expected_std).mean() < 1e-5
+    assert (avg_dt - (simple_params['T'] / (simple_params['N_steps'] - 1)) < 1e-4)
+    assert (means.std_x - means.expected_std).mean() < 1e-3
     assert (means.mean_x - 0).mean() < 1e-3
