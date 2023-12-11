@@ -89,13 +89,13 @@ class Losses():
         x_reformat = tf.reshape(x[:, 0], (batch_size, N_steps))
         xn_tensor = x_reformat[:, -1]
         # Loss given the strike function
-        tn = np.float64(T)
+        T = np.float64(T)
         TM = np.float64(TM)
         real_values = phi(
-            xn_tensor, 
-            tn,
-            TM,
-            ct
+            xn = xn_tensor, 
+            T = T,
+            Tm = TM,
+            ct = ct
         )
         # Strike loss
         strike_loss = Losses.get_loss(
@@ -107,20 +107,21 @@ class Losses():
         strike_loss = tf.reduce_sum(strike_loss) / batch_size
         # Autodiff phi
         xn = tf.Variable(xn_tensor, name = 'xn', trainable = True)
-        tn = tf.Variable(np.float64(T), name = 'tn', trainable=False)
+        T = tf.Variable(np.float64(T), name = 'tn', trainable=False)
+        TM = tf.Variable(np.float64(TM), name = 'ct', trainable=False)
         ct = tf.Variable(np.float64(ct), name = 'ct', trainable=False)
         # T = tf.Variable(np.float64(T), name = 'T', trainable=False)
         with tf.GradientTape() as tape:
             y = phi(
-                xn, 
-                tn, 
-                T, 
-                ct
+                xn = xn, 
+                T = T, 
+                Tm = TM, 
+                ct = ct
             )
         grad_df = tape.gradient(
             y, 
             {
-                'xn':xn   
+                'xn': xn   
             }
         )
         df_dxn = grad_df['xn'] if grad_df['xn'] is not None else 0. * xn
