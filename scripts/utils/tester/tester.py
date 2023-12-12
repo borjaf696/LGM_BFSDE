@@ -140,11 +140,9 @@ class IRSTester(Tester):
         df['V'] = IRS.IRS_test(
             xn = df.X_0.values.astype(np.float64),
             t = df.dt.values.astype(np.float64),
-            Ti = T,
-            Tm = TM,
-            ct = df.ct.values.astype(np.float64),
-            sigma_value = sigma_value,
-            predictions = df.lgm_single_step_V.values.astype(np.float64)
+            Ti = np.float64(T),
+            Tm = np.float64(TM),
+            ct = df.ct.values.astype(np.float64)
         )
         
         folder = '/'.join(
@@ -173,11 +171,9 @@ class SwaptionTester(Tester):
         df['V'] = Swaption.Swaption_test(
             xn = df.xt.values.astype(np.float64),
             t = df.dt.values.astype(np.float64),
-            Ti = T,
-            Tm = TM,
+            Ti = np.float64(T),
+            Tm = np.float64(TM),
             ct = df.ct.values.astype(np.float64),
-            sigma_value = sigma_value,
-            predictions = df.lgm_single_step_V.values.astype(np.float64)
         )
         
         folder = '/'.join(
