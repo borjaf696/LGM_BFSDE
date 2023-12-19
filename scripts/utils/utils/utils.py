@@ -469,7 +469,7 @@ class Swap():
         return np.maximum(0, par_swap - K)
     
     @staticmethod
-    def positive_par_parswap_tf(
+    def positive_parswap_tf(
         xn,
         t,
         Ti,
@@ -498,12 +498,12 @@ class Swap():
         )
         swap = tf.concat(
             [
-                par_swap,
+                par_swap - K,
                 zero_mask
             ],
             axis = 1
         )
-        return tf.reduce_max(swap - K, axis = 1)
+        return tf.reduce_max(swap, axis = 1)
     
     @staticmethod
     def density_normal(
@@ -647,14 +647,82 @@ class Swaption():
         period = 6,
         K = 0.03
     ):
-        # A(i,m)
-        anuality_term = Swap.anuality_swap(xn,Ti,Tm,ct,period)
-        # Variable leg
-        par_swap = Swap.positive_par_parswap_tf(xn, t, Ti, Tm, ct, period, K)
-        # Numeraire
+        def integra_swap(xT, xnj, ct, cT):
+            positive_par_swap = Swap.positive_parswap_tf(
+                xn = xT,
+                t = Ti,
+                Ti = Ti,
+                Tm = Tm,
+                ct = ct,
+                period = period,
+                K = K
+            )
+            density_normal = Swap.density_normal(
+                xT,
+                xnj,
+                ct = ct,
+                cT = cT
+            )
+            anuality_term = Swap.anuality_swap(
+                xT,
+                Ti,
+                Tm,
+                ct,
+                period
+            )
+            return (positive_par_swap * anuality_term * density_normal)
+        
+        def swaption_at_strike(xn, t, ct):
+            positive_par_swap = Swap.positive_par_parswap(
+                xn = xn,
+                t = t,
+                Ti = Ti,
+                Tm = Tm,
+                ct = ct,
+                period = period,
+                K = K
+            )
+            anuality_term = Swap.anuality_swap(
+                xn,
+                Ti,
+                Tm,
+                ct,
+                period
+            )
+            return positive_par_swap * anuality_term
+            
+            
+        import scipy.integrate as integrate
+        cT = max(ct)
+        swaption_results = []
+        for i, t_local in enumerate(t):
+            xni = xn[i]
+            cti = ct[i]
+            if t_local != Ti:
+                swaption_results.append(
+                    integrate.fixed_quad(
+                        integra_swap, 
+                        xni - 6 * np.sqrt((cT - cti)), 
+                        xni + 6 * np.sqrt((cT - cti)), 
+                        n = 1000,
+                        args = (
+                            xni,
+                            cti,
+                            cT    
+                        )
+                    )[0]    
+                )
+            else:
+                swaption_results.append(
+                    swaption_at_strike(
+                        xni,
+                        Ti,
+                        cti
+                    )
+                )
         N = ZeroBond.N_tensor(t, xn, ct)
-        return N*anuality_term*par_swap
-
+        return swaption_results * N
+    
     @staticmethod
     def Swaption_test_normalized(
         xn,
@@ -796,7 +864,7 @@ class VisualizationHelper():
         """
         sns.set(style="darkgrid")
 
-        plt.figure(figsize=(6, 6))
+        plt.figure(figsize=(10, 4))
         for y in values_column:
             sns.lineplot(data=df, x=x, y=y, label=y)
         plt.title(title)
