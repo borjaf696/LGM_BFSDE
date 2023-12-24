@@ -439,17 +439,17 @@ class Swap():
         pi = ZeroBond.Z_normalized(xn, t, Ti, ct)
         pm = ZeroBond.Z_normalized(xn, Ti, Tm, ct)
         # For anuality we only require last Zeta_t
-        fixed = Swap.anuality_swap(
+        anuality = Swap.anuality_swap(
             xn,
             Ti,
             Tm,
             ct,
             period
         )
-        return (pi - pm) / (fixed)
+        return (pi - pm) / anuality
     
     @staticmethod
-    def positive_par_parswap(
+    def positive_parswap(
         xn,
         t,
         Ti,
@@ -645,12 +645,13 @@ class Swaption():
         Tm,
         ct,
         period = 6,
-        K = 0.03
+        K = 0.03,
+        cT = None
     ):
-        def integra_swap(xT, xnj, ct, cT):
+        def integra_swap(xT, xnj, t, ct, cT):
             positive_par_swap = Swap.positive_parswap_tf(
                 xn = xT,
-                t = Ti,
+                t = t,
                 Ti = Ti,
                 Tm = Tm,
                 ct = ct,
@@ -663,6 +664,7 @@ class Swaption():
                 ct = ct,
                 cT = cT
             )
+            # TODO: change
             anuality_term = Swap.anuality_swap(
                 xT,
                 Ti,
@@ -673,7 +675,7 @@ class Swaption():
             return (positive_par_swap * anuality_term * density_normal)
         
         def swaption_at_strike(xn, t, ct):
-            positive_par_swap = Swap.positive_par_parswap(
+            positive_par_swap = Swap.positive_parswap(
                 xn = xn,
                 t = t,
                 Ti = Ti,
@@ -691,9 +693,8 @@ class Swaption():
             )
             return positive_par_swap * anuality_term
             
-            
         import scipy.integrate as integrate
-        cT = max(ct)
+        cT = max(ct) if cT is None else cT
         swaption_results = []
         for i, t_local in enumerate(t):
             xni = xn[i]
@@ -702,11 +703,12 @@ class Swaption():
                 swaption_results.append(
                     integrate.fixed_quad(
                         integra_swap, 
-                        xni - 6 * np.sqrt((cT - cti)), 
-                        xni + 6 * np.sqrt((cT - cti)), 
-                        n = 1000,
+                        xni - 8 * np.sqrt((cT - cti)), 
+                        xni + 8 * np.sqrt((cT - cti)), 
+                        n = 100,
                         args = (
                             xni,
+                            t_local,
                             cti,
                             cT    
                         )
