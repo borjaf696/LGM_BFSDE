@@ -1,11 +1,11 @@
 # Linear Gaussian Markov Model for Forward Backward Stochastic Differential Equations
 
-This project focuses on employing both shallow and deep neural networks to model and adjust complex financial products. The core concept revolves around defining an objective function, $\phi$ which is articulated through the equation $\hat{v}_{t+1} = v_t + \frac{\partial N}{\partial x_t}\cdot \delta_x$. In this equation, $\frac{\partial N}{\partial x_t}$represents the derivative of the network with respect to $x_t$, and $v_t$  represents the network's prediction at time $t$. It is easy to see that $\frac{\partial N}{\partial x_t}$ represents and approximation of $\frac{\partial \phi}{\partial x_t}$.
+This project focuses on employing both shallow and deep neural networks to model and adjust complex financial products. The core concept revolves around defining an objective function, $\phi$ which is articulated through the equation $\hat{v}_{t+1} = v_t + \frac{\partial N}{\partial x_t}\cdot \delta_x$. In this equation, $\frac{\partial N}{\partial x_t}$ represents the derivative of the network with respect to $x_t$, and $v_t$  represents the network's prediction at time $t$. It is easy to see that $\frac{\partial N}{\partial x_t}$ represents and approximation of $\frac{\partial \phi}{\partial x_t}$.
 
 A significant challenge in the financial domain is that the analytical formulae for many financial products at a given time $t$ are either unknown or too complex to compute efficiently. Typically, only the expression of the function at maturity is known. To address this, the loss function utilized in this project is:
 
 $$
-\mathcal{L}_{path} = \frac{1}{n-1}\sum_{i = 1}^{n - 1}\left(\hat{v}_i - v_i\right)^2 + (\phi(x_T) - v_T)^2 + (\frac{\partial\phi}{\partial x_T} - \frac{\partial NN}{\partial x_T})^2
+L_{path} = \frac{1}{n-1}\sum_{i = 1}^{n - 1}\left(\hat{v}_i - v_i\right)^2 + (\phi(x_T) - v_T)^2 + (\frac{\partial\phi}{\partial x_T} - \frac{\partial NN}{\partial x_T})^2
 $$
 
 This loss function clearly indicates that the function is not known at any given time $t$, but only at maturity $T$. Consequently, the problem is framed as an semisupervised learning task.
