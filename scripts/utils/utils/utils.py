@@ -1,15 +1,18 @@
+import sys
+import warnings
+
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-import sys
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 from scipy.stats import norm
 from typing import (
     Any, 
     List,
     Dict
 )
-import matplotlib.pyplot as plt
-import seaborn as sns
 # Constants
 TAUS = {
     3: 0.25,
@@ -250,9 +253,10 @@ class FinanceUtils():
         Returns:
             _type_: _description_
         """
-        import scipy.integrate as integrate
-        return integrate.quad(lambda x: FinanceUtils.sigma(t = x, 
-                                              sigma_0 = sigma_value)**2, 0, t)[0]      
+        from scipy.integrate import quad
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return quad(lambda x: FinanceUtils.sigma(t = x, sigma_0 = sigma_value)**2, a = 0, b = t, limit = 50)[0]      
     
 class ZeroBond():  
     @staticmethod
@@ -306,7 +310,22 @@ class ZeroBond():
             _type_: _description_
         """
         assert ct is not None
-        return ZeroBond.D_tensor(T) * tf.math.exp(-0.5 * ZeroBond.H_tensor(T)**2 * ct - ZeroBond.H_tensor(T)*xt) * ZeroBond.N_tensor(t, xt, ct)
+        discount_factor = ZeroBond.D_tensor(T)
+        first_exponential_term = - ZeroBond.H_tensor(T)*xt
+        second_exponential_term = -0.5 * ZeroBond.H_tensor(T)**2 * ct
+        N = ZeroBond.N_tensor(t, xt, ct)
+        return  tf.math.multiply(
+            discount_factor, 
+            tf.math.multiply(
+                tf.math.exp(
+                    tf.math.add(
+                        first_exponential_term,
+                        second_exponential_term
+                    )
+                ),
+                N
+            )
+        )
     @staticmethod
     def D(t, r = 0.03):
         """_summary_
@@ -395,7 +414,10 @@ class ZeroBond():
         Returns:
             _type_: _description_
         """
-        return tf.math.multiply(ZeroBond.Z_tensor(xn, tn, T, ct), 1/ ZeroBond.N_tensor(tn, xn, ct))
+        return tf.math.multiply(
+            ZeroBond.Z_tensor(xn, tn, T, ct), 
+            1/ ZeroBond.N_tensor(tn, xn, ct)
+        )
     
     @staticmethod
     def Z_strike_normalized(xn, T, Tm, ct, period = None, K = None):
@@ -471,7 +493,6 @@ class Swap():
     @staticmethod
     def positive_parswap_tf(
         xn,
-        t,
         Ti,
         Tm,
         ct,
@@ -481,41 +502,39 @@ class Swap():
         # Calculate par swap
         par_swap = Swap.par_swap(
             xn,
-            t,
+            Ti,
             Ti,
             Tm,
             ct,
             period
         )
-        # Concat zero mask for reduce max
-        zero_mask = tf.zeros(
-            (par_swap.shape[0], 1), 
-            dtype = par_swap.dtype
-        )
-        par_swap = tf.reshape(
-            par_swap,
-            (par_swap.shape[0], 1)
-        )
-        swap = tf.concat(
-            [
-                par_swap - K,
-                zero_mask
-            ],
-            axis = 1
-        )
-        return tf.reduce_max(swap, axis = 1)
+        if par_swap.shape != ():
+            # Concat zero mask for reduce max
+            zero_mask = tf.zeros(
+                (par_swap.shape[0], 1), 
+                dtype = par_swap.dtype
+            )
+            par_swap = tf.reshape(
+                par_swap,
+                (par_swap.shape[0], 1)
+            )
+            swap = tf.concat(
+                [
+                    par_swap - K,
+                    zero_mask
+                ],
+                axis = 1
+            )
+            return tf.reduce_max(swap, axis = 1)
+        return max(par_swap - K, 0) 
     
     @staticmethod
     def density_normal(
-        xT,
-        xn,
-        ct,
-        cT
+        x,
+        mu,
+        var
     ):
-        mu = xn
-        std = np.sqrt(cT - ct)
-        p = norm.pdf(xT, mu, std)
-        return p
+        return 1 / np.sqrt(2 * np.pi * var) * np.exp( -0.5 * ( x - mu ) ** 2 / var )
     
 
 class IRS():
@@ -540,25 +559,6 @@ class IRS():
         N = ZeroBond.N_tensor(T, xn, ct)
         # Compose the IRS result
         return N * anuality_term*(par_swap - K)
-        
-    @staticmethod
-    def IRS_normalized_np(
-        xn, 
-        T,
-        TN, 
-        ct, 
-        period = 6,
-        K = 0.03
-    ):
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        num_times = np.float64((TN - T) / time_add)
-        variable = (1 - ZeroBond.Z(xn, T, TN, ct))
-        fixed = 0.
-        for i in range(1.0, num_times + 1):
-            fixed += ZeroBond.Z(xn, T, T + i * time_add, ct)
-        fixed *= -tau * K
-        return variable + fixed
     
     @staticmethod
     def IRS_normalized(
@@ -648,36 +648,34 @@ class Swaption():
         K = 0.03,
         cT = None
     ):
-        def integra_swap(xT, xnj, t, ct, cT):
+        def integra_swap(xT, xnj, ct, cT):
             positive_par_swap = Swap.positive_parswap_tf(
                 xn = xT,
-                t = t,
                 Ti = Ti,
                 Tm = Tm,
-                ct = ct,
+                ct = cT,
                 period = period,
                 K = K
             )
+            #print(f"Positive parswaps: {positive_par_swap}")
             density_normal = Swap.density_normal(
-                xT,
-                xnj,
-                ct = ct,
-                cT = cT
+                x = xT,
+                mu = xnj,
+                var = cT - ct
             )
             # TODO: change
             anuality_term = Swap.anuality_swap(
                 xT,
                 Ti,
                 Tm,
-                ct,
+                cT,
                 period
             )
             return (positive_par_swap * anuality_term * density_normal)
         
-        def swaption_at_strike(xn, t, ct):
-            positive_par_swap = Swap.positive_parswap(
+        def swaption_at_strike(xn, ct):
+            positive_par_swap = Swap.positive_parswap_tf(
                 xn = xn,
-                t = t,
                 Ti = Ti,
                 Tm = Tm,
                 ct = ct,
@@ -703,12 +701,11 @@ class Swaption():
                 swaption_results.append(
                     integrate.fixed_quad(
                         integra_swap, 
-                        xni - 8 * np.sqrt((cT - cti)), 
-                        xni + 8 * np.sqrt((cT - cti)), 
+                        xni - 4 * np.sqrt(cT - cti), 
+                        xni + 4 * np.sqrt(cT - cti), 
                         n = 100,
                         args = (
                             xni,
-                            t_local,
                             cti,
                             cT    
                         )
@@ -718,7 +715,6 @@ class Swaption():
                 swaption_results.append(
                     swaption_at_strike(
                         xni,
-                        Ti,
                         cti
                     )
                 )
@@ -778,18 +774,58 @@ class Swaption():
         print(f'y_star: {y_star}')
         print(f'Function result: {fystar(y_star)}')
         # First term
-        first_term = ZeroBond.D(T) * norm.cdf(- y_star/np.sqrt(ceta_T), 0, 1)
+        first_term = ZeroBond.D(T) * norm.cdf(- y_star/np.sqrt(ceta_T), loc = 0, scale = 1)
         # Second term
-        second_term = - ZeroBond.D(TN) * norm.cdf(- (y_star + deltaHN*ceta_T)/np.sqrt(ceta_T), 0, 1)
+        second_term = - ZeroBond.D(TN) * norm.cdf(- (y_star + deltaHN*ceta_T)/np.sqrt(ceta_T), loc = 0, scale = 1)
         # Third term
         third_term = 0
         for i in range(1, num_times + 1):
             Ti = T + i * time_add
             deltaHi = ZeroBond.H(Ti) - ZeroBond.H(T)
-            third_term += ZeroBond.D(Ti) * norm.cdf( - (y_star + deltaHi * ceta_T) / np.sqrt(ceta_T), 0, 1)
+            third_term += ZeroBond.D(Ti) * norm.cdf( - (y_star + deltaHi * ceta_T) / np.sqrt(ceta_T), loc = 0, scale = 1)
         print(f'Final i: {i}, {Ti}')
         third_term *= - tau * K
         return first_term + second_term + third_term
+    
+    @staticmethod
+    def Swaption_at_zero_int(
+        ceta_T,
+        T,
+        TN,
+        period = 6,
+        K = 0.03,
+    ):    
+        def integra_zero(y):
+            time_add = TIMES[period]
+            num_times = int(np.float64((TN - T) / time_add))
+            anuality_term = 0
+            for i in range(1, num_times + 1):
+                Ti = T + i * time_add
+                deltaHi = ZeroBond.H(Ti)
+                deltaHi_sq = ZeroBond.H(Ti)**2
+                anuality_term += TAUS[period] * K * ZeroBond.D(Ti) * np.exp(
+                    - deltaHi * y - 0.5 * deltaHi_sq * ceta_T
+                )
+            deltaHN = ZeroBond.H(TN)
+            deltaHN_sq = ZeroBond.H(TN)**2
+            final_pay_term = ZeroBond.D(TN) * np.exp(
+                - deltaHN * y - 0.5 * deltaHN_sq * ceta_T
+            )
+            first_pay_term = ZeroBond.D(T) * np.exp(
+                - ZeroBond.H(T) * y - 0.5 * ZeroBond.H(T) ** 2 * ceta_T
+            )
+            normal_density = Swap.density_normal(y, mu = 0, var = ceta_T)
+            res = - anuality_term - final_pay_term + first_pay_term
+            res[res < 0] = 0
+            return res * normal_density 
+        
+        import scipy.integrate as integrate
+        return integrate.fixed_quad(
+                    integra_zero, 
+                    0 - 4 * np.sqrt(ceta_T), 
+                    0 + 4 * np.sqrt(ceta_T), 
+                    n = 100,
+                )[0]  
 
     
     @staticmethod
