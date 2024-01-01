@@ -468,7 +468,7 @@ class Swap():
             ct,
             period
         )
-        return (pi - pm) / anuality
+        return tf.math.multiply((pi - pm),  1 / anuality)
     
     @staticmethod
     def positive_parswap(
