@@ -849,7 +849,23 @@ class Swaption():
         K = 0.03
     ):
         N = ZeroBond.N_tensor(T, xn, ct)
-        return Swaption.Swaption_test(xn, T, T, Tm, ct, period, K) / N
+        positive_par_swap = Swap.positive_parswap_tf(
+            xn = xn,
+            Ti = T,
+            Tm = Tm,
+            ct = ct,
+            period = period,
+            K = K
+        )
+        anuality_term = Swap.anuality_swap(
+            xn,
+            T,
+            Tm,
+            ct,
+            period
+        )
+        par_swap = positive_par_swap * anuality_term
+        return tf.math.multiply(par_swap, 1 / N)
     
 class TestExamples():
     

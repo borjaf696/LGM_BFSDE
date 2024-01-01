@@ -1,0 +1,1 @@
+hatch run python scripts/launcher.py --T 4 --TM 8 --phi swaption --nsteps 48 --nepochs 100 --sigma 0.01 --schema 1 --nsims 100000 --normalize True --save True 
