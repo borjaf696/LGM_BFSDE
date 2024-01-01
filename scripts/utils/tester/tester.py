@@ -160,20 +160,21 @@ class IRSTester(Tester):
         
 class SwaptionTester(Tester):
     # TODO: Swaption needs more parameters
-    def test(self, df, model, test_name_file, sigma_value, TM = None, T = None, report_to_wandb = False):
+    def test(self, df, model, test_name_file, sigma_value, features= None, TM = None, T = None, report_to_wandb = False):
         assert test_name_file is not None, 'Test name file is not provided'
         
         df = super()._calculate_basics(
             df, 
             model, 
-            sigma_value
+            sigma_value,
+            features = features
         )
         df['V'] = Swaption.Swaption_test(
-            xn = df.xt.values.astype(np.float64),
+            xn = df.X_0.values.astype(np.float64),
             t = df.dt.values.astype(np.float64),
             Ti = np.float64(T),
             Tm = np.float64(TM),
-            ct = df.ct.values.astype(np.float64),
+            ct = df.ct.values.astype(np.float64)
         )
         
         folder = '/'.join(

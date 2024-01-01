@@ -150,9 +150,9 @@ if __name__ == '__main__':
     # Test
     if args.test:
         # TODO: Remove from here
-        test_name_file = f'data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_dim_{dim}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
+        test_name_file = f'data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}.csv'
         # TODO: Remove from here
-        train_name_file = f'data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_dim_{dim}_{T}_{nsims}_{N_steps}_epochs_{epochs}.csv'
+        train_name_file = f'data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}.csv'
         test_sims = min(int(nsims * 0.001), 10000)
         mcsimulator = MCSimulation(
             T = T,  
