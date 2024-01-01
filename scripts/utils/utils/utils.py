@@ -444,7 +444,7 @@ class Swap():
         tau = TAUS[period]
         time_add = TIMES[period]
         num_times = int(np.float64((TN - T) / time_add))
-        fixed = 0
+        fixed = tf.zeros_like(xn)
         for i in range(1, num_times + 1):
             fixed += ZeroBond.Z_normalized(xn, T, T + i * time_add, ct)
         return tau * fixed
