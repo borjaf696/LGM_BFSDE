@@ -865,7 +865,7 @@ class Swaption():
             period
         )
         par_swap = positive_par_swap * anuality_term
-        return tf.math.multiply(par_swap, 1 / N)
+        return par_swap
     
 class TestExamples():
     
