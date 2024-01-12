@@ -336,6 +336,7 @@ class ZeroBond():
                 N
             )
         )
+        
     @staticmethod
     def D(t, r = 0.03):
         """_summary_
@@ -875,7 +876,7 @@ class Swaption():
             period
         )
         par_swap = positive_par_swap * anuality_term
-        return tf.math.multiply(par_swap, 1 / N)
+        return par_swap
     
 class TestExamples():
     
