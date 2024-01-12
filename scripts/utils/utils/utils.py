@@ -295,7 +295,17 @@ class ZeroBond():
         Returns:
             _type_: _description_
         """
-        return tf.math.multiply(1/ZeroBond.D_tensor(t), tf.math.exp(tf.math.add(tf.math.multiply(ZeroBond.H_tensor(t), xt), 0.5 * tf.math.square(ZeroBond.H_tensor(t)) * ct)))
+        return tf.math.multiply(
+            1/ZeroBond.D_tensor(t), 
+            tf.math.exp(
+                tf.math.add(
+                    tf.math.multiply(
+                        ZeroBond.H_tensor(t), xt
+                    ), 
+                    0.5 * tf.math.square(ZeroBond.H_tensor(t)) * ct
+                )
+            )
+        )
     @staticmethod
     def Z_tensor(xt, t, T, ct = None):
         """_summary_
@@ -444,7 +454,7 @@ class Swap():
         tau = TAUS[period]
         time_add = TIMES[period]
         num_times = int(np.float64((TN - T) / time_add))
-        fixed = tf.zeros_like(xn)
+        fixed = 0
         for i in range(1, num_times + 1):
             fixed += ZeroBond.Z_normalized(xn, T, T + i * time_add, ct)
         return tau * fixed
