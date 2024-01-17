@@ -295,7 +295,17 @@ class ZeroBond():
         Returns:
             _type_: _description_
         """
-        return tf.math.multiply(1/ZeroBond.D_tensor(t), tf.math.exp(tf.math.add(tf.math.multiply(ZeroBond.H_tensor(t), xt), 0.5 * tf.math.square(ZeroBond.H_tensor(t)) * ct)))
+        return tf.math.multiply(
+            1/ZeroBond.D_tensor(t), 
+            tf.math.exp(
+                tf.math.add(
+                    tf.math.multiply(
+                        ZeroBond.H_tensor(t), xt
+                    ), 
+                    0.5 * tf.math.square(ZeroBond.H_tensor(t)) * ct
+                )
+            )
+        )
     @staticmethod
     def Z_tensor(xt, t, T, ct = None):
         """_summary_
@@ -326,6 +336,7 @@ class ZeroBond():
                 N
             )
         )
+        
     @staticmethod
     def D(t, r = 0.03):
         """_summary_
