@@ -107,7 +107,7 @@ def trainer(
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
-    size_of_the_batch = 64
+    size_of_the_batch = 16
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance

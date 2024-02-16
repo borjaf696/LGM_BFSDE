@@ -415,7 +415,6 @@ class ZeroBond():
         return np.exp(-0.5 * ZeroBond.H(T) ** 2 * ct - ZeroBond.H(T) * xt)
     
     @staticmethod
-    # @tf.function
     def Z_normalized(xn, tn, T, ct):
         """_summary_
         Args:
