@@ -446,6 +446,7 @@ class Swap():
     @staticmethod
     def anuality_swap(
         xn, 
+        t,
         T,
         TN, 
         ct, 
@@ -457,7 +458,7 @@ class Swap():
         num_times = tf.convert_to_tensor(np.int64((TN - T) / time_add + 1), dtype = tf.int64)
         fixed = tf.zeros_like(xn)
         for i in range(1, num_times):
-            fixed += ZeroBond.Z_normalized(xn, T, T + i * time_add, ct)
+            fixed += ZeroBond.Z_normalized(xn, t, T + i * time_add, ct)
         return tau * fixed
     
     @staticmethod
@@ -474,6 +475,7 @@ class Swap():
         # For anuality we only require last Zeta_t
         anuality = Swap.anuality_swap(
             xn,
+            Ti,
             Ti,
             Tm,
             ct,
@@ -584,6 +586,7 @@ class IRS():
         anuality_term = Swap.anuality_swap(
             xn,
             T,
+            T,
             Tm,
             ct,
             period
@@ -608,6 +611,7 @@ class IRS():
         # A(i,m)
         anuality_term = Swap.anuality_swap(
             xn,
+            t,
             Ti,
             Tm,
             ct,
@@ -634,6 +638,7 @@ class IRS():
         # A(i,m)
         anuality_term = Swap.anuality_swap(
             xn,
+            t,
             Ti,
             Tm,
             ct,
@@ -644,7 +649,7 @@ class IRS():
         # Numeraire
         N = ZeroBond.N_tensor(t, xn, ct)
         # Compose the IRS result
-        return N * anuality_term*(par_swap - K)
+        return N * anuality_term * (par_swap - K)
     
 class Swaption():
     
@@ -674,15 +679,7 @@ class Swaption():
                 mu = xnj,
                 var = cT - ct
             )
-            # TODO: change
-            anuality_term = Swap.anuality_swap(
-                xT,
-                Ti,
-                Tm,
-                cT,
-                period
-            )
-            return (positive_par_swap * anuality_term * density_normal)
+            return (positive_par_swap * density_normal)
         
         def swaption_at_strike(xn, ct):
             positive_par_swap = Swap.positive_parswap_tf(
@@ -693,14 +690,7 @@ class Swaption():
                 period = period,
                 K = K
             )
-            anuality_term = Swap.anuality_swap(
-                xn,
-                Ti,
-                Tm,
-                ct,
-                period
-            )
-            return positive_par_swap * anuality_term
+            return positive_par_swap
             
         import scipy.integrate as integrate
         cT = tf.reduce_max(ct) if cT is None else cT
@@ -730,7 +720,15 @@ class Swaption():
                     )
                 )
         N = ZeroBond.N_tensor(t, xn, ct)
-        return swaption_results * N
+        anuality_term = Swap.anuality_swap(
+            xn,
+            t,
+            Ti,
+            Tm,
+            ct,
+            period
+        )
+        return swaption_results * N * anuality_term
     
     def Swaption_test_tf(xn, t, Ti, Tm, ct, period=6, K=0.03, cT=None):
         cT = tf.reduce_max(ct) if cT is None else cT
@@ -920,6 +918,7 @@ class Swaption():
         )
         anuality_term = Swap.anuality_swap(
             xn,
+            T,
             T,
             Tm,
             ct,
