@@ -13,8 +13,10 @@ from scripts.utils.utils.utils import (
 )
 # Loss functions
 from scripts.losses.losses import Losses
+# Basics python
 import numpy as np
 import pandas as pd
+import gc
 import time 
 # Wandb integration
 import wandb
@@ -107,7 +109,7 @@ def trainer(
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
-    size_of_the_batch = 64
+    size_of_the_batch = 16
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
@@ -120,8 +122,8 @@ def trainer(
         sigma = sigma, 
         nsims = min(10 * nsims, 100000) if simulate_in_epoch else nsims
     )
-    mc_paths_tranformed_x0 = df_x[features].values
-    x0 = mc_paths_tranformed_x0.astype(np.float64)
+    x0 = df_x[features].values.astype(np.float64)
+    
     if schema == 1:
         lgm_single_step = LgmSingleStepNaive(
             n_steps = N_steps, 
@@ -167,6 +169,8 @@ def trainer(
             normalize=normalize,
             data_sample=x0
         )
+    del x0
+    gc.collect()
     # Model name 
     if TM is not None:
         model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.h5'
@@ -207,6 +211,8 @@ def trainer(
             mc_paths_tranformed = df_x[features].values
             x = mc_paths_tranformed.astype(np.float64)
             delta_x = df_x.delta_x_0.values.astype(np.float64)
+            del df_x
+            gc.collect()
         print(f'{epoch}...', end = '')
         for batch in range(batches):
             Utils.print_progress_bar(

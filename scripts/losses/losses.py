@@ -87,12 +87,11 @@ class Losses():
         batch_size = int(np.floor(samples / N_steps))
         # For f and f'
         x_reformat = tf.reshape(x[:, 0], (batch_size, N_steps))
-        xn_tensor = x_reformat[:, -1]
         # Loss given the strike function
         T = np.float64(T)
         TM = np.float64(TM)
         real_values = phi(
-            xn = xn_tensor, 
+            xn = x_reformat[:, -1], 
             T = T,
             Tm = TM,
             ct = ct
@@ -106,7 +105,7 @@ class Losses():
         )
         strike_loss = tf.reduce_sum(strike_loss) / batch_size
         # Autodiff phi
-        xn = tf.Variable(xn_tensor, name = 'xn', trainable = True)
+        xn = tf.Variable(x_reformat[:, -1], name = 'xn', trainable = True)
         T = tf.Variable(np.float64(T), name = 'tn', trainable=False)
         TM = tf.Variable(np.float64(TM), name = 'ct', trainable=False)
         ct = tf.Variable(np.float64(ct), name = 'ct', trainable=False)
