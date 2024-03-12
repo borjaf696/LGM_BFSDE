@@ -169,8 +169,16 @@ def trainer(
             normalize=normalize,
             data_sample=x0
         )
+    import os
+    import psutil
+    process = psutil.Process(os.getpid())
+    memory_use = process.memory_info().rss / (1024 * 1024)
+    print(f"Memory usage before deletion: {memory_use}")
     del x0
     gc.collect()
+    process = psutil.Process(os.getpid())
+    memory_use = process.memory_info().rss / (1024 * 1024)
+    print(f"Memory usage after deletion: {memory_use}")
     # Model name 
     if TM is not None:
         model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.h5'
