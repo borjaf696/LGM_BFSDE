@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
-
+import os
+import psutil
 root_path = Path(__file__).resolve().parent.parent.parent  
 sys.path.append(str(root_path))
 # Sys
@@ -83,6 +84,7 @@ class LgmSingleStep(tf.keras.Model):
         )
         if normalize:
             # Normalizer
+            start_normalization_time = time.time()
             normalizer = preprocessing.Normalization()
             normalizer.adapt(
                 data_sample
@@ -90,6 +92,8 @@ class LgmSingleStep(tf.keras.Model):
             x = normalizer(
                 input_tmp
             )
+            end_normalization_time = time.time()
+            print(f"Normalization time: {end_normalization_time - start_normalization_time}s")
         else:
             x = input_tmp
         # Configuration read from:
@@ -180,7 +184,13 @@ class LgmSingleStep(tf.keras.Model):
         )
         print(f'Positions to avoid from loss {self._expected_sample_size - np.sum(self._mask_loss)}')
         print(f'Positions to complete from loss {np.sum(self._mask_loss)}')
-    
+        # Size of the masks
+        number_of_elements = tf.size(self._mask_loss).numpy() + tf.size(self._mask_preds).numpy()
+        element_size = self._mask_loss.dtype.size
+        print(f'[MEMORY] Total memory consumed by masks: {number_of_elements * element_size / 2**30} Gb')
+        
+        # Remove extra data
+        del mask_loss, idx_preds, mask_v
     @property
     def model(self):
         """_summary_
@@ -303,6 +313,9 @@ class LgmSingleStep(tf.keras.Model):
     def plot_tracker_results(self, epoch: int):
         print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
         print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
+        process = psutil.Process(os.getpid())
+        memory_use = process.memory_info().rss / (1024 * 1024)
+        print(f"\tMemory usage before deletion: {memory_use}")
 
     
     def get_losses_internal(self):

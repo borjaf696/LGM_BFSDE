@@ -40,6 +40,8 @@ class Preprocessor:
             ],
             inplace = True
         )
+        # Remove unused dfs
+        del df_tmp
         
         return df_x
     

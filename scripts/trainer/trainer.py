@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import gc
 import time 
+import os, psutil
 # Wandb integration
 import wandb
 from wandb.keras import WandbCallback
@@ -37,7 +38,7 @@ def simulate(
         sigma = sigma
     )
     # Training paths
-    mc_paths, _ = mcsimulator.simulate(nsims)
+    mc_paths, w = mcsimulator.simulate(nsims)
     if len(mc_paths.shape) < 2:
         df_x = Preprocessor.preprocess_paths(
             T,
@@ -62,6 +63,8 @@ def simulate(
     features.append(
         "dt"
     )
+    # Remove unused data
+    del mc_paths, w
     
     return df_x, features
 
@@ -169,16 +172,9 @@ def trainer(
             normalize=normalize,
             data_sample=x0
         )
-    import os
-    import psutil
-    process = psutil.Process(os.getpid())
-    memory_use = process.memory_info().rss / (1024 * 1024)
-    print(f"Memory usage before deletion: {memory_use}")
     del x0
     gc.collect()
-    process = psutil.Process(os.getpid())
-    memory_use = process.memory_info().rss / (1024 * 1024)
-    print(f"Memory usage after deletion: {memory_use}")
+    print(f"[MEMORY] Main dataframe memory usage: {df_x.memory_usage(deep = True).sum() / 2**30} Gb")
     # Model name 
     if TM is not None:
         model_name = f'models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.h5'

@@ -44,4 +44,5 @@ class MCSimulation():
             X[i, :, :] = X[i - 1, :, :] + sigma * (W[i, :] - W[i - 1, :])
         if show:
             X = np.linspace(0, T, N)
+        print(f"[MEMORY] Simulation memory usage: {(W.nbytes + X.nbytes) / 2**30} Gb")
         return X, W
