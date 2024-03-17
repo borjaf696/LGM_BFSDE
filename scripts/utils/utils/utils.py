@@ -210,7 +210,6 @@ class MLUtils():
             X[cols_renamed] = (X[cols_to_transform] - self.__mean) / (self.__std)
             return X
         
-    @tf.function
     def sin_activation(x):
         return tf.math.sin(x)
     
@@ -523,19 +522,17 @@ class Swap():
         )
         if par_swap.shape != ():
             # Concat zero mask for reduce max
-            zero_mask = tf.zeros(
-                (par_swap.shape[0], 1), 
-                dtype = par_swap.dtype
-            )
-            par_swap = tf.reshape(
-                par_swap,
-                (par_swap.shape[0], 1)
-            )
-            swap = tf.concat(
-                [
-                    par_swap - K,
-                    zero_mask
-                ],
+            return tf.reduce_max(
+                tf.concat(
+                    [
+                        tf.reshape(par_swap,(par_swap.shape[0], 1)) - K,
+                        tf.zeros(
+                            (par_swap.shape[0], 1), 
+                            dtype = par_swap.dtype
+                        )
+                    ],
+                    axis = 1
+                ),
                 axis = 1
             )
             return tf.reduce_max(swap, axis = 1)
@@ -742,14 +739,12 @@ class Swaption():
                 x_min = xni - 4 * tf.sqrt(cT - cti)
                 x_max = xni + 4 * tf.sqrt(cT - cti)
                 x_values = tf.linspace(x_min, x_max, 100)
-                @tf.function
                 def integra_swap(xT):
                     positive_par_swap = Swap.positive_parswap_tf(xn=xT, Ti=Ti, Tm=Tm, ct=cT, period=period, K=K)
                     density_normal = Swap.density_normal(x=xT, mu=xni, var=cT - cti)
                     anuality_term = Swap.anuality_swap(xT, Ti, Tm, cT, period)
                     return positive_par_swap * anuality_term * density_normal
                 
-                @tf.function
                 def swaption_at_strike(xn, ct):
                     positive_par_swap = Swap.positive_parswap_tf(xn = xn, Ti = Ti, Tm = Tm, ct = ct, period = period, K = K)
                     anuality_term = Swap.anuality_swap(xn,Ti,Tm,ct,period)
@@ -924,7 +919,7 @@ class Swaption():
             ct,
             period
         )
-        return positive_par_swap * anuality_term
+        return positive_par_swap # * anuality_term
     
 class TestExamples():
     

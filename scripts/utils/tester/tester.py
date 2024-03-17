@@ -12,7 +12,7 @@ from utils.utils.utils import (
     FinanceUtils,
     TestExamples
 )
-
+import tensorflow as tf
 # Wandb integration
 import wandb
 from wandb.keras import WandbCallback
@@ -21,8 +21,8 @@ class Tester(ABC):
     
     def _calculate_basics(self, df, model, sigma_value = None, features = None):
         mc_paths_tranformed = df[features].values
-        x = mc_paths_tranformed.astype(np.float64)
-        delta_x = df.delta_x_0.values.astype(np.float64)
+        x = tf.convert_to_tensor(mc_paths_tranformed.astype(np.float64))
+        delta_x = tf.convert_to_tensor(df.delta_x_0.values.astype(np.float64))
         v_lgm_single_step, _ = model.predict(
             x, 
             delta_x,

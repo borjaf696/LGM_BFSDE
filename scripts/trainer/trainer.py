@@ -11,13 +11,13 @@ from scripts.utils.utils.utils import (
     CyclicLR,
     Utils
 )
-# Loss functions
-from scripts.losses.losses import Losses
 # Basics python
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 import gc
 import time 
+import tracemalloc
 import os, psutil
 # Wandb integration
 import wandb
@@ -88,6 +88,8 @@ def trainer(
         save_model: bool = False,
         simulate_in_epoch: bool = False
 ):
+    # Start tracer
+    tracemalloc.start()
     if report_to_wandb:
         wandb.init(
             project="lgm",
@@ -113,6 +115,7 @@ def trainer(
     epochs = epochs
     # Batch execution with baby steps
     size_of_the_batch = 16
+    # Recalculate nsims
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
@@ -201,6 +204,7 @@ def trainer(
     # Custom iteration: 
     epoch = 0
     loss = np.infty
+    
     while loss > 0.00001 and epoch < epochs:
         # Data used as features
         if (epoch == 0) or simulate_in_epoch:
@@ -215,28 +219,46 @@ def trainer(
             mc_paths_tranformed = df_x[features].values
             x = mc_paths_tranformed.astype(np.float64)
             delta_x = df_x.delta_x_0.values.astype(np.float64)
-            del df_x
-            gc.collect()
+            # Create the tf.Dataset
+            x = tf.reshape(x, (nsims, N_steps, 2)) # Num simulations, steps per simulation, t and x
+            delta_x = tf.reshape(delta_x, (nsims, N_steps))
+            dataset = tf.data.Dataset.from_tensor_slices((x, delta_x))
+            dataset = dataset.batch(size_of_the_batch)
         print(f'{epoch}...', end = '')
-        for batch in range(batches):
+        snapshot1 = tracemalloc.take_snapshot()
+        for batch, (x_batch, delta_x_batch) in enumerate(dataset):
             Utils.print_progress_bar(
                 batch, 
                 batches, prefix='batches', suffix='|', length=50, fill='█'
             )
-            x_batch = x[batch * batch_size: (batch + 1) * batch_size, :]
-            delta_x_batch = delta_x[batch * batch_size: (batch + 1) * batch_size]
+            local_batch_size = x_batch.shape[0]
+            x_batch = tf.reshape(x_batch, (N_steps * local_batch_size, 2))
+            delta_x_batch = tf.reshape(delta_x_batch, (N_steps * local_batch_size, 1))
+            import os, psutil
+            process = psutil.Process(os.getpid())
+            memory_use = process.memory_info().rss / (1024 * 1024)
+            print(f"\tMemory usage_1 (trainer): {memory_use}")
             loss, _, _, _ = lgm_single_step.custom_train_step(
-                X = x_batch,
+                x = tf.convert_to_tensor(x_batch),
                 batch = batch,
                 epoch = epoch, 
-                delta_x = delta_x_batch,
-                loss = Losses.loss_lgm
+                delta_x = tf.convert_to_tensor(delta_x_batch)
             )
+            process = psutil.Process(os.getpid())
+            memory_use = process.memory_info().rss / (1024 * 1024)
+            print(f"\tMemory usage_2 (trainer): {memory_use}")
+        snapshot2 = tracemalloc.take_snapshot()
+        top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+        print("[ Top 10 diferencias ]")
+        for stat in top_stats[:10]:
+            print(stat)
         if epoch % 1 == 0:
             lgm_single_step.plot_tracker_results(epoch)
         epoch += 1
         # Reset error trackers
         lgm_single_step.reset_trackers()
+        # Clear tf backend
+        lgm_single_step.clear_memory()
     # Explanation cut training
     print(f'Finishing training with {epoch} epochs and loss {loss:.4f}')
     # Save the model

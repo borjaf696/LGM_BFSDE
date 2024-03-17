@@ -105,25 +105,37 @@ class Losses():
         )
         strike_loss = tf.reduce_sum(strike_loss) / batch_size
         # Autodiff phi
+        
         xn = tf.Variable(x_reformat[:, -1], name = 'xn', trainable = True)
         T = tf.Variable(np.float64(T), name = 'tn', trainable=False)
         TM = tf.Variable(np.float64(TM), name = 'ct', trainable=False)
         ct = tf.Variable(np.float64(ct), name = 'ct', trainable=False)
         # T = tf.Variable(np.float64(T), name = 'T', trainable=False)
-        with tf.GradientTape() as tape:
+        import os, psutil
+        process = psutil.Process(os.getpid())
+        memory_use = process.memory_info().rss / (1024 * 1024)
+        print(f"\tMemory usage_1(loss - grad): {memory_use}")
+        with tf.GradientTape(persistent = False) as tape:
             y = phi(
                 xn = xn, 
                 T = T, 
                 Tm = TM, 
                 ct = ct
             )
+        memory_use = process.memory_info().rss / (1024 * 1024)
+        print(f"\tMemory usage_2(loss - grad): {memory_use}")
         grad_df = tape.gradient(
             y, 
             {
                 'xn': xn   
             }
         )
+        print(f"Grad_df shape: {grad_df['xn'].shape}")
+        memory_use = process.memory_info().rss / (1024 * 1024)
+        print(f"\tMemory usage_3(loss - grad): {memory_use}")
         df_dxn = grad_df['xn'] if grad_df['xn'] is not None else 0. * xn
+        memory_use = process.memory_info().rss / (1024 * 1024)
+        print(f"\tMemory usage_4(loss - grad): {memory_use}")
         # Derivative loss
         derivative_loss = Losses.get_loss(
             t1 = derivatives,

@@ -244,7 +244,9 @@ class LGM_model_one_step(tf.keras.Model):
                 print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
                 self._loss_tracker_t1_array.append(self._loss_tracker_t1.result())
                 self._loss_tracker_t2_array.append(self._loss_tracker_t2.result())
-                self._loss_tracker_t3_array.append(self._loss_tracker_t3.result())         
+                self._loss_tracker_t3_array.append(self._loss_tracker_t3.result()) 
+        # Clean memory
+        del x, predictions, grads, loss, v     
         # Store losses
         return float(self.loss_tracker.result()), float(self._loss_tracker_t1.result()), float(self._loss_tracker_t2.result()), float(self._loss_tracker_t3.result())
     
