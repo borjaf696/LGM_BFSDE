@@ -237,7 +237,7 @@ def trainer(
             import os, psutil
             process = psutil.Process(os.getpid())
             memory_use = process.memory_info().rss / (1024 * 1024)
-            print(f"\tMemory usage_1 (trainer): {memory_use}")
+            print(f"\n\tMemory usage_1 (trainer): {memory_use}")
             loss, _, _, _ = lgm_single_step.custom_train_step(
                 x = tf.convert_to_tensor(x_batch),
                 batch = batch,

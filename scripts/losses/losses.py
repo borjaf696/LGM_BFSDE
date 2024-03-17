@@ -130,7 +130,6 @@ class Losses():
                 'xn': xn   
             }
         )
-        print(f"Grad_df shape: {grad_df['xn'].shape}")
         memory_use = process.memory_info().rss / (1024 * 1024)
         print(f"\tMemory usage_3(loss - grad): {memory_use}")
         df_dxn = grad_df['xn'] if grad_df['xn'] is not None else 0. * xn
