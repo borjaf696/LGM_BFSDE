@@ -4,7 +4,43 @@ import gc
 from scripts.model.model_lgm_single_step import LgmSingleStep
 
 class LgmSingleStepNaive(LgmSingleStep):
-    def predict(self, X: tf.Tensor, delta_x: tf.Tensor, build_masks: bool = False, debug: bool = False):
+
+    @tf.function
+    def predict_tf(self, X: tf.Tensor, delta_x: tf.Tensor, build_masks: bool = False):
+        predictions = self._custom_model(X)
+        predictions = tf.cast(predictions, dtype=tf.float64)
+        predictions_rolled = tf.roll(predictions, shift=1, axis=0)
+
+        grads = self._get_dv_dx(X)[1]
+        grads_rolled = tf.roll(grads, shift=1, axis=0)
+
+        grads_rolled = tf.reshape(grads_rolled, (tf.shape(grads)[0], 1))
+        delta_x = tf.reshape(delta_x, (tf.shape(delta_x)[0], 1))
+
+        v = predictions_rolled + grads_rolled * delta_x
+
+        if build_masks:
+            idx_preds = tf.range(0, tf.shape(X)[0], self.N)
+            np_mask_v = tf.ones((tf.shape(X)[0], 1), dtype=tf.float64)
+            np_mask_v = tf.tensor_scatter_nd_update(
+                np_mask_v, 
+                tf.reshape(idx_preds, (-1, 1)), 
+                tf.zeros(
+                    tf.shape(idx_preds)[0], 
+                    dtype=tf.float64
+                )
+            )
+            mask_v = np_mask_v
+            mask_preds = 1 - np_mask_v
+        else:
+            mask_v = self._mask_v
+            mask_preds = self._mask_preds
+
+        v = v * mask_v + predictions * mask_preds
+
+        return v, predictions
+
+    def predict(self, X: tf.Tensor, delta_x: tf.Tensor, build_masks: bool = False, debug: bool = False, device: str = "cpu"):
         predictions = self._custom_model(X)
         predictions = tf.cast(predictions, dtype=tf.float64)
         predictions_rolled = tf.roll(predictions, shift=1, axis=0)

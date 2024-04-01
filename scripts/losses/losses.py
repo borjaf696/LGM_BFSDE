@@ -67,6 +67,60 @@ class Losses():
         )
         return partial_loss
     
+    import tensorflow as tf
+
+    @staticmethod
+    @tf.function
+    def loss_lgm_tf(
+        x: tf.Tensor, 
+        v: tf.Tensor, 
+        ct: tf.Tensor,
+        derivatives: tf.Tensor, 
+        predictions: tf.Tensor, 
+        N_steps: tf.Tensor, 
+        T: tf.Tensor,
+        TM: tf.Tensor,
+        phi,
+    ):
+        L1 = tf.math.abs
+        L2 = tf.math.squared_difference
+        betas = [1.0, 1.0, 1.0]
+        samples = tf.cast(tf.shape(x)[0], dtype = tf.float64)
+        batch_size = samples // N_steps
+        x_reformat = tf.reshape(x[:, 0], (batch_size, N_steps))
+        real_values = phi(xn=x_reformat[:, -1], T=T, Tm=TM, ct=ct)
+        
+        strike_loss = Losses.get_loss(t1=real_values, t2=predictions[:, -1], L1=L1, L2=L2)
+        strike_loss = tf.reduce_sum(strike_loss) / tf.cast(batch_size, dtype=tf.float64)
+        
+        xn = tf.Variable(x_reformat[:, -1], name='xn', trainable=True)
+        with tf.GradientTape(persistent=False) as tape:
+            y = phi(xn=xn, T=T, Tm=TM, ct=ct)
+        grad_df = tape.gradient(y, xn)
+        df_dxn = grad_df if grad_df is not None else 0. * xn
+        
+        derivative_loss = Losses.get_loss(t1=derivatives, t2=df_dxn, L1=L1, L2=L2)
+        derivative_loss = tf.reduce_sum(derivative_loss) / tf.cast(batch_size, dtype=tf.float64)
+        
+        og_shape = tf.shape(v)
+        v = tf.reshape(v, [-1])
+        predictions = tf.reshape(predictions, [-1])
+        step_loss = Losses.get_loss(t1=v, t2=predictions, L1=L1, L2=L2)
+        step_loss = tf.reshape(step_loss, og_shape)
+        
+        error_per_step = tf.cumsum(step_loss[:, 1:], axis=1)
+        error_per_step = tf.reduce_sum(error_per_step[:, -2]) / tf.cast(N_steps, dtype=tf.float64) / tf.cast(batch_size, dtype=tf.float64)
+        
+        strike_loss *= betas[0]
+        derivative_loss *= betas[1]
+        error_per_step *= betas[2]
+        
+        losses_trackers = {'t1': strike_loss, 't2': derivative_loss, 't3': error_per_step}
+        loss_per_sample = strike_loss + derivative_loss + error_per_step
+        
+        return loss_per_sample, losses_trackers, df_dxn
+
+    
     @staticmethod
     def loss_lgm( 
         x: tf.Tensor, 
@@ -114,7 +168,7 @@ class Losses():
         import os, psutil
         process = psutil.Process(os.getpid())
         memory_use = process.memory_info().rss / (1024 * 1024)
-        print(f"\tMemory usage_1(loss - grad): {memory_use}")
+        # print(f"\tMemory usage_1(loss - grad): {memory_use}")
         with tf.GradientTape(persistent = False) as tape:
             y = phi(
                 xn = xn, 
@@ -123,7 +177,7 @@ class Losses():
                 ct = ct
             )
         memory_use = process.memory_info().rss / (1024 * 1024)
-        print(f"\tMemory usage_2(loss - grad): {memory_use}")
+        # print(f"\tMemory usage_2(loss - grad): {memory_use}")
         grad_df = tape.gradient(
             y, 
             {
@@ -131,10 +185,10 @@ class Losses():
             }
         )
         memory_use = process.memory_info().rss / (1024 * 1024)
-        print(f"\tMemory usage_3(loss - grad): {memory_use}")
+        # print(f"\tMemory usage_3(loss - grad): {memory_use}")
         df_dxn = grad_df['xn'] if grad_df['xn'] is not None else 0. * xn
         memory_use = process.memory_info().rss / (1024 * 1024)
-        print(f"\tMemory usage_4(loss - grad): {memory_use}")
+        # print(f"\tMemory usage_4(loss - grad): {memory_use}")
         # Derivative loss
         derivative_loss = Losses.get_loss(
             t1 = derivatives,

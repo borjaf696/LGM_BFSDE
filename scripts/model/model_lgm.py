@@ -160,7 +160,7 @@ class LGM_model(tf.keras.Model):
         with tf.GradientTape() as tape:
             v, predictions = self.predict(x)
             predictions = tf.Variable(predictions)   
-            loss = self.loss_lgm(x = X, 
+            loss = self.loss_lgm(x = x, 
                                  v = v, 
                                  predictions = predictions, 
                                  N_steps = self.N,

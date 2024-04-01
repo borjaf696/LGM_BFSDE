@@ -255,7 +255,7 @@ class FinanceUtils():
         from scipy.integrate import quad
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            return quad(lambda x: FinanceUtils.sigma(t = x, sigma_0 = sigma_value)**2, a = 0, b = t, limit = 50)[0]      
+            return quad(lambda x: FinanceUtils.sigma(t = x, sigma_0 = sigma_value)**2, a = 0, b = t, limit = 50)[0]   
     
 class ZeroBond():  
     @staticmethod
@@ -320,6 +320,7 @@ class ZeroBond():
         """
         assert ct is not None
         discount_factor = ZeroBond.D_tensor(T)
+        print(f"T type: {T.dtype} H type: {ZeroBond.H_tensor(T).dtype} xt type: {xt.dtype}")
         first_exponential_term = - ZeroBond.H_tensor(T)*xt
         second_exponential_term = -0.5 * ZeroBond.H_tensor(T)**2 * ct
         N = ZeroBond.N_tensor(t, xt, ct)
@@ -424,10 +425,12 @@ class ZeroBond():
         Returns:
             _type_: _description_
         """
-        return tf.math.multiply(
+        res = tf.math.multiply(
             ZeroBond.Z_tensor(xn, tn, T, ct), 
             1/ ZeroBond.N_tensor(tn, xn, ct)
         )
+        print(f"Shape xn: {tf.shape(xn)}")
+        return tf.reshape(res, tf.shape(xn))
     
     @staticmethod
     def Z_strike_normalized(xn, T, Tm, ct, period = None, K = None):
@@ -443,23 +446,18 @@ class ZeroBond():
     
 class Swap():
     @staticmethod
-    def anuality_swap(
-        xn, 
-        t,
-        T,
-        TN, 
-        ct, 
-        period = 6,  
-    ):
-        # Anuality params
-        tau = TAUS[period]
-        time_add = TIMES[period]
-        num_times = tf.convert_to_tensor(np.int64((TN - T) / time_add + 1), dtype = tf.int64)
-        fixed = tf.zeros_like(xn)
-        for i in range(1, num_times):
-            fixed += ZeroBond.Z_normalized(xn, t, T + i * time_add, ct)
+    @tf.function
+    def anuality_swap(xn, t, T, TN, ct, period=6):
+        tau = tf.cast(TAUS[period], dtype = tf.float64)
+        time_add = tf.cast(TIMES[period], dtype = tf.float64)
+        num_times = tf.cast((TN - T) / time_add + 1, dtype=tf.int64)
+        indices = tf.range(1, num_times, dtype=tf.float64)
+        def body(i):
+            return ZeroBond.Z_normalized(xn, t, T + i * time_add, ct)
+        fixed_contributions = tf.map_fn(body, indices, fn_output_signature=tf.float64)
+        fixed = tf.reduce_sum(fixed_contributions, axis = 0)
         return tau * fixed
-    
+
     @staticmethod
     def par_swap(
         xn,
@@ -471,6 +469,7 @@ class Swap():
     ):  
         pi = ZeroBond.Z_normalized(xn, t, Ti, ct)
         pm = ZeroBond.Z_normalized(xn, Ti, Tm, ct)
+        print(f"Pi: {pi} Pm: {pm}")
         # For anuality we only require last Zeta_t
         anuality = Swap.anuality_swap(
             xn,
@@ -480,6 +479,7 @@ class Swap():
             ct,
             period
         )
+        print(f"Annuity: {anuality}")
         return tf.math.multiply((pi - pm),  1 / anuality)
     
     @staticmethod
@@ -520,6 +520,7 @@ class Swap():
             ct,
             period
         )
+        print(f"Par swap: {par_swap}")
         if par_swap.shape != ():
             # Concat zero mask for reduce max
             return tf.reduce_max(
@@ -535,7 +536,6 @@ class Swap():
                 ),
                 axis = 1
             )
-            return tf.reduce_max(swap, axis = 1)
         return max(par_swap - K, 0) 
     
     @staticmethod
@@ -931,8 +931,8 @@ class TestExamples():
         return exponential * norma
         
     @staticmethod
-    def strike_value(x: tf.Tensor):
-        return tf.linalg.norm(x)
+    def strike_test(xn, T, Tm, ct, period = None, K = None):
+        return tf.math.exp(xn)
     
 class VisualizationHelper():
     @staticmethod

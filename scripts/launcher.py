@@ -1,4 +1,9 @@
+import sys
 import os
+script_dir = os.path.dirname(__file__)
+project_root = os.path.abspath(os.path.join(script_dir, os.pardir))
+sys.path.append(project_root)
+print(f"Project root: {project_root}")
 import argparse
 # TODO: Remove asap
 import numpy as np
@@ -46,7 +51,6 @@ def parse_args():
     parser.add_argument("--dim", type = int, help = "Number of dimensions for each component", default=1)
     parser.add_argument("--sigma", type=float, help="Active volatility (default 10%)", default=0.01)
     parser.add_argument("--nsteps", type=int, help="Number of steps for each year path (default 100)", default=50)
-    parser.add_argument("--test", type=bool, help="Test", default = True)
     parser.add_argument("--simulate-in-epoch", type = bool,help = "Simulate paths in each epoch", default = False)
     # Schema
     parser.add_argument("--schema", type=int, help="Schema of the model", default = 1)
@@ -54,6 +58,7 @@ def parse_args():
     parser.add_argument("--normalize", type = bool, help = "Do normalization", default = False)
     parser.add_argument("--nepochs", type=int, help="Number of epochs (default 100)", default=100)
     parser.add_argument("--save", type = bool, help="Save the model", default = False)
+    parser.add_argument("--device", type = str, help = "Device to be used", default = "cpu")
     # Wandb Tracker
     parser.add_argument("--wandb", type=bool, help="Wandb", default = False)
     args = parser.parse_args()
@@ -72,7 +77,7 @@ def get_phi(active):
     elif active == 'swaption':
         phi = Swaption.Swaption_normalized
     elif active == 'test':
-        phi = TestExamples.strike_value
+        phi = TestExamples.strike_test
     return phi
 
 def get_phi_test(active):
@@ -113,6 +118,7 @@ if __name__ == '__main__':
     print(f'\tDimensions: {dim}')
     print(f'\tX0: {X0}')
     print(f'\tSigma: {sigma}')
+    print(f'\tDevice: {args.device}')
     # tf model training
     phi_str = args.phi
     # Imprime los valores de los argumentos
@@ -145,7 +151,8 @@ if __name__ == '__main__':
         report_to_wandb = args.wandb,
         schema = args.schema, 
         save_model = args.save,
-        simulate_in_epoch= args.simulate_in_epoch
+        simulate_in_epoch= args.simulate_in_epoch,
+        device = args.device
     )
     # Test
     if args.test:

@@ -86,7 +86,8 @@ def trainer(
         anneal_lr: bool = True,
         schema: int = 1,
         save_model: bool = False,
-        simulate_in_epoch: bool = False
+        simulate_in_epoch: bool = False,
+        device: str = "cpu"
 ):
     # Start tracer
     tracemalloc.start()
@@ -143,7 +144,8 @@ def trainer(
             name = phi_str,
             report_to_wandb=report_to_wandb,
             normalize=normalize,
-            data_sample=x0
+            data_sample=x0,
+            device = device
         )
     elif schema == 2:
         lgm_single_step = LgmSingleStepModelAdjusted(
@@ -175,8 +177,6 @@ def trainer(
             normalize=normalize,
             data_sample=x0
         )
-    del x0
-    gc.collect()
     print(f"[MEMORY] Main dataframe memory usage: {df_x.memory_usage(deep = True).sum() / 2**30} Gb")
     # Model name 
     if TM is not None:
@@ -237,16 +237,16 @@ def trainer(
             import os, psutil
             process = psutil.Process(os.getpid())
             memory_use = process.memory_info().rss / (1024 * 1024)
-            print(f"\n\tMemory usage_1 (trainer): {memory_use}")
-            loss, _, _, _ = lgm_single_step.custom_train_step(
-                x = tf.convert_to_tensor(x_batch),
+            # print(f"\n\tMemory usage_1 (trainer): {memory_use}")
+            loss, _, _, _ = lgm_single_step.custom_train_step_tf(
+                x = tf.convert_to_tensor(x_batch, dtype = tf.float64),
                 batch = batch,
                 epoch = epoch, 
-                delta_x = tf.convert_to_tensor(delta_x_batch)
+                delta_x = tf.convert_to_tensor(delta_x_batch, dtype = tf.float64)
             )
             process = psutil.Process(os.getpid())
             memory_use = process.memory_info().rss / (1024 * 1024)
-            print(f"\tMemory usage_2 (trainer): {memory_use}")
+            # print(f"\tMemory usage_2 (trainer): {memory_use}")
         snapshot2 = tracemalloc.take_snapshot()
         top_stats = snapshot2.compare_to(snapshot1, 'lineno')
         print("[ Top 10 diferencias ]")
