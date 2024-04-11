@@ -2,52 +2,58 @@ import sys
 from pathlib import Path
 import os
 import psutil
-root_path = Path(__file__).resolve().parent.parent.parent  
+
+root_path = Path(__file__).resolve().parent.parent.parent
 sys.path.append(str(root_path))
 # Sys
 import sys
 import os
 import gc
+
 # Load configuration
 import json
+
 # Imports
 import tensorflow as tf
 import numpy as np
 import time
+
 # From
 from tensorflow.keras import layers
 from tensorflow.keras.layers import Normalization
 from tensorflow import keras
+
 # Utils
-from scripts.utils.utils.utils import (
-    FinanceUtils
-) 
+from scripts.utils.utils.utils import FinanceUtils
+
 # Loss functions
 from scripts.losses.losses import Losses
-# Wandb
+
+# Wandb
 import wandb
 
-# TODO: Store all the metadata
+
+# TODO: Store all the metadata
 class LgmSingleStep(tf.keras.Model):
 
     def __init__(
         self,
         n_steps,
-        T = 0,
+        T=0,
         name="zerobond",
         *,
-        dim = 2,
-        verbose = False,
-        sigma = None,
-        batch_size = None,
-        phi = None,
-        future_T = None,
-        report_to_wandb = False,
-        normalize = False,
+        dim=2,
+        verbose=False,
+        sigma=None,
+        batch_size=None,
+        phi=None,
+        future_T=None,
+        report_to_wandb=False,
+        normalize=False,
         # First simulation
-        data_sample = None,
-        device = "cpu",
-        **kwargs
+        data_sample=None,
+        device="cpu",
+        **kwargs,
     ):
         """_summary_
 
@@ -61,14 +67,14 @@ class LgmSingleStep(tf.keras.Model):
             phi (_type_, optional): _description_. Defaults to None.
         """
         super(LgmSingleStep, self).__init__(name=name, **kwargs)
-        # Set device to gpu
-        self.__set_device(device = device)
+        # Set device to gpu
+        self.__set_device(device=device)
         # Training relevant attributes
-        self.N = tf.constant(n_steps, dtype = tf.float64)
-        self.T = tf.constant(T, dtype = tf.float64)
+        self.N = tf.constant(n_steps, dtype=tf.float64)
+        self.T = tf.constant(T, dtype=tf.float64)
         # Same for actives with out future
-        self.future_T = tf.constant(future_T, dtype = tf.float64)
-        self._batch_size = tf.constant(batch_size, dtype = tf.float64)
+        self.future_T = tf.constant(future_T, dtype=tf.float64)
+        self._batch_size = tf.constant(batch_size, dtype=tf.float64)
         self._expected_sample_size = self.N * self._batch_size
         # Phi function
         self.__phi = phi
@@ -76,40 +82,35 @@ class LgmSingleStep(tf.keras.Model):
         self.__name = name
         # Constantes:
         print(f"{'#'*100}")
-        print(f'Strike time (T): {T}')
-        print(f'Second strike time (TM): {self.future_T}')
-        print(f'Number of steps per path: {n_steps}')
+        print(f"Strike time (T): {T}")
+        print(f"Second strike time (TM): {self.future_T}")
+        print(f"Number of steps per path: {n_steps}")
         print(f"Model name: {self.__name}")
         print(f"Batch size: {self._batch_size}")
         print(f"Expected sample size: {self._expected_sample_size}")
         print(f"{'#'*100}")
         # Model with time and value
-        input_tmp = keras.Input(
-            shape = (dim, ), 
-            name = self.__name
-        )
+        input_tmp = keras.Input(shape=(dim,), name=self.__name)
         if normalize:
             # Normalizer
             start_normalization_time = time.time()
             normalizer = Normalization()
-            normalizer.adapt(
-                data_sample
-            )
-            x = normalizer(
-                input_tmp
-            )
+            normalizer.adapt(data_sample)
+            x = normalizer(input_tmp)
             end_normalization_time = time.time()
-            print(f"Normalization time: {end_normalization_time - start_normalization_time}s")
+            print(
+                f"Normalization time: {end_normalization_time - start_normalization_time}s"
+            )
         else:
             x = input_tmp
         # Configuration read from:
         # --- name
         # --- T, strike time
         configuration = None
-        with open('scripts/configs/ff_config.json', 'r+') as f:
+        with open("scripts/configs/ff_config.json", "r+") as f:
             configuration = json.load(f)[name][str(T)]
-        self.__num_layers = configuration['layers']
-        print(f'Number of layers: {self.__num_layers}')
+        self.__num_layers = configuration["layers"]
+        print(f"Number of layers: {self.__num_layers}")
         print(f'Number of hidden units: {configuration["hidden_units"]}')
         # Build dense layers
         self.__dense_layers = []
@@ -118,10 +119,10 @@ class LgmSingleStep(tf.keras.Model):
         for i in range(self.__num_layers):
             self.__dense_layers.append(
                 tf.keras.layers.Dense(
-                    units = configuration['hidden_units'],
-                    kernel_initializer = tf.keras.initializers.HeUniform(),
+                    units=configuration["hidden_units"],
+                    kernel_initializer=tf.keras.initializers.HeUniform(),
                     kernel_regularizer=tf.keras.regularizers.l2(0.01),
-                    name = 'internal_dense_'+str(i)
+                    name="internal_dense_" + str(i),
                 )
             )
             self.__batch_norm_layers.append(tf.keras.layers.BatchNormalization())
@@ -130,13 +131,13 @@ class LgmSingleStep(tf.keras.Model):
             x = self.__batch_norm_layers[i](x)
             x = tf.keras.layers.ReLU()(x)
         output_tmp = layers.Dense(
-            units = 1, 
-            kernel_initializer = tf.keras.initializers.GlorotUniform(),
-            name = 'output_dense')(x)
+            units=1,
+            kernel_initializer=tf.keras.initializers.GlorotUniform(),
+            name="output_dense",
+        )(x)
         self._custom_model = keras.Model(
-            inputs = input_tmp,
-            outputs = output_tmp,
-            name = name)
+            inputs=input_tmp, outputs=output_tmp, name=name
+        )
         # Set the loss function
         self.loss_lgm = Losses.loss_lgm_tf
         # Metrics tracker
@@ -147,8 +148,8 @@ class LgmSingleStep(tf.keras.Model):
         self._loss_tracker_t3 = tf.keras.metrics.Mean(name="step_loss")
         # Duration each step
         self._deltaT = T / self.N
-        # CT
-        self._ct = FinanceUtils.C(T, sigma_value = sigma)
+        # CT
+        self._ct = FinanceUtils.C(T, sigma_value=sigma)
         # Status variables
         self._grads, self._predictions = None, None
         # Create masks
@@ -157,28 +158,46 @@ class LgmSingleStep(tf.keras.Model):
         self._verbose = verbose
         # Track with wandb
         self.__wandb = report_to_wandb
-        
+
     def __create_masks(self):
-        idx_preds = tf.reshape(tf.range(0, self._expected_sample_size, self.N, dtype = tf.int64), (-1, 1))
-        mask_v = tf.ones((self._expected_sample_size, 1), dtype = tf.float64)
-        mask_v = tf.tensor_scatter_nd_update(mask_v, idx_preds, tf.zeros_like(idx_preds, dtype=tf.float64))
+        idx_preds = tf.reshape(
+            tf.range(0, self._expected_sample_size, self.N, dtype=tf.int64), (-1, 1)
+        )
+        mask_v = tf.ones((self._expected_sample_size, 1), dtype=tf.float64)
+        mask_v = tf.tensor_scatter_nd_update(
+            mask_v, idx_preds, tf.zeros_like(idx_preds, dtype=tf.float64)
+        )
         self._mask_v = mask_v
         self._mask_preds = 1 - mask_v
-        print(f'Positions to avoid from V {self._expected_sample_size - np.sum(self._mask_v)}')
-        print(f'Positions to complete from V {np.sum(self._mask_preds)}')
-        
-        idx_loss = tf.reshape(tf.range(self.N - 1, self._expected_sample_size, self.N, dtype = tf.int64), (-1, 1))
+        print(
+            f"Positions to avoid from V {self._expected_sample_size - np.sum(self._mask_v)}"
+        )
+        print(f"Positions to complete from V {np.sum(self._mask_preds)}")
+
+        idx_loss = tf.reshape(
+            tf.range(self.N - 1, self._expected_sample_size, self.N, dtype=tf.int64),
+            (-1, 1),
+        )
         mask_loss = tf.zeros((self._expected_sample_size, 1), dtype=tf.float64)
-        mask_loss = tf.tensor_scatter_nd_update(mask_loss, idx_loss, tf.ones_like(idx_loss, dtype=tf.float64))
+        mask_loss = tf.tensor_scatter_nd_update(
+            mask_loss, idx_loss, tf.ones_like(idx_loss, dtype=tf.float64)
+        )
 
         self._mask_loss = mask_loss
-        print(f'Positions to avoid from loss: {self._expected_sample_size - tf.reduce_sum(self._mask_loss).numpy()}')
-        print(f'Positions to complete from loss: {tf.reduce_sum(self._mask_loss).numpy()}')
-        number_of_elements = tf.size(self._mask_loss).numpy() + tf.size(self._mask_preds).numpy()
+        print(
+            f"Positions to avoid from loss: {self._expected_sample_size - tf.reduce_sum(self._mask_loss).numpy()}"
+        )
+        print(
+            f"Positions to complete from loss: {tf.reduce_sum(self._mask_loss).numpy()}"
+        )
+        number_of_elements = (
+            tf.size(self._mask_loss).numpy() + tf.size(self._mask_preds).numpy()
+        )
         element_size = tf.dtypes.as_dtype(self._mask_loss.dtype).size
-        print(f'[MEMORY] Total memory consumed by masks: {number_of_elements * element_size / 2**30} Gb')
+        print(
+            f"[MEMORY] Total memory consumed by masks: {number_of_elements * element_size / 2**30} Gb"
+        )
 
-        
     @property
     def model(self):
         """_summary_
@@ -187,7 +206,7 @@ class LgmSingleStep(tf.keras.Model):
             _type_: _description_
         """
         return self._custom_model
-    
+
     @property
     def metrics(self):
         """_summary_
@@ -196,10 +215,9 @@ class LgmSingleStep(tf.keras.Model):
             _type_: _description_
         """
         return [self.loss_tracker, self.mae_metric]
-    
+
     def summary(self):
-        """_summary_
-        """
+        """_summary_"""
         self._custom_model.summary()
 
     def call(self, inputs):
@@ -213,73 +231,61 @@ class LgmSingleStep(tf.keras.Model):
         """
         # TODO: Complete the delta_x
         return self.predict(inputs)
-    
+
     @tf.function
     def train_step(self, data):
         pass
-    
-    def define_compiler(self, optimizer = 'adam', learning_rate = 1e-3):
+
+    def define_compiler(self, optimizer="adam", learning_rate=1e-3):
         """_summary_
 
         Args:
             optimizer (str, optional): _description_. Defaults to 'adam'.
             learning_rate (_type_, optional): _description_. Defaults to 1e-3.
         """
-        if optimizer == 'adam':
-            print(f'Optimizer set to {optimizer}')
+        if optimizer == "adam":
+            print(f"Optimizer set to {optimizer}")
             self._optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
-            
+
     def learning_rate(self, learning_rate):
         self._optimizer.learning_rate.assign(learning_rate)
 
     @tf.function
     def custom_train_step_tf(
-        self, 
-        x: tf.Tensor,
-        batch: int, 
-        epoch: int, 
-        delta_x: tf.Tensor
+        self, x: tf.Tensor, batch: int, epoch: int, delta_x: tf.Tensor
     ):
-        x = tf.Variable(x, trainable = True, dtype = tf.float64)
-        delta_x = tf.Variable(delta_x, trainable = False, dtype = tf.float64)
         # Define las variables tf para tape
         with tf.GradientTape(persistent=False) as tape:
-            v, predictions = self.predict_tf(x, delta_x=delta_x)
-            print(f"X_1: {x}")
+            v, predictions, grads = self.predict_tf(x, delta_x=delta_x)
             v = tf.reshape(v, (self._batch_size, self.N))
             predictions = tf.reshape(predictions, (self._batch_size, self.N))
-            print(f"X_2: {x}")
-            loss_values, losses_tracker, analytical_grads = self.loss_lgm(
+            loss_values, losses_tracker, analytical_grads = Losses.loss_lgm_tf(
                 x=x,
                 v=v,
                 ct=self._ct,
-                derivatives=self._get_dv_dxi(self.N - 1),
+                derivatives=grads[:, tf.cast(self.N - 1, tf.int32)],
                 predictions=predictions,
                 N_steps=self.N,
                 T=self.T,
                 TM=self.future_T,
-                phi=self.__phi
+                batch_size=self._batch_size,
+                phi=self.__phi,
             )
         grads = tape.gradient(loss_values, self.model.trainable_weights)
         self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
-        self._loss_tracker_t1.update_state(losses_tracker['t1'])
-        self._loss_tracker_t2.update_state(losses_tracker['t2'])
-        self._loss_tracker_t3.update_state(losses_tracker['t3'])
+        self._loss_tracker_t1.update_state(losses_tracker["t1"])
+        self._loss_tracker_t2.update_state(losses_tracker["t2"])
+        self._loss_tracker_t3.update_state(losses_tracker["t3"])
         self.loss_tracker.update_state(loss_values)
         return (
-            self.loss_tracker.result(), 
-            self._loss_tracker_t1.result(), 
-            self._loss_tracker_t2.result(), 
-            self._loss_tracker_t3.result()
+            self.loss_tracker.result(),
+            self._loss_tracker_t1.result(),
+            self._loss_tracker_t2.result(),
+            self._loss_tracker_t3.result(),
         )
 
-    
     def custom_train_step(
-        self, 
-        x: tf.Tensor,
-        batch: int, 
-        epoch: int, 
-        delta_x: tf.Tensor
+        self, x: tf.Tensor, batch: int, epoch: int, delta_x: tf.Tensor
     ):
         """_summary_
 
@@ -292,12 +298,13 @@ class LgmSingleStep(tf.keras.Model):
             _type_: _description_
         """
         import os, psutil
+
         process = psutil.Process(os.getpid())
         memory_use = process.memory_info().rss / (1024 * 1024)
         # print(f"\tMemory usage_1(grad): {memory_use}")
         batch_size = tf.shape(x)[0] // self.N
         # Define the tf variables for tape
-        with tf.GradientTape(persistent = False) as tape:
+        with tf.GradientTape(persistent=False) as tape:
             memory_use = process.memory_info().rss / (1024 * 1024)
             # print(f"\tMemory usage_1(pred): {memory_use}")
             v, predictions = self.predict(x, delta_x=delta_x)
@@ -306,7 +313,7 @@ class LgmSingleStep(tf.keras.Model):
             v = tf.reshape(v, (batch_size, self.N))
             predictions = tf.reshape(predictions, (batch_size, self.N))
             memory_use = process.memory_info().rss / (1024 * 1024)
-            # print(f"\tMemory usage_1(loss): {memory_use}")
+            # print(f"\tMemory usage_1(loss): {memory_use}")
             loss_values, losses_tracker, analytical_grads = self.loss_lgm(
                 x=x,
                 v=v,
@@ -316,142 +323,164 @@ class LgmSingleStep(tf.keras.Model):
                 N_steps=self.N,
                 T=self.T,
                 TM=self.future_T,
-                phi=self.__phi
+                phi=self.__phi,
             )
             memory_use = process.memory_info().rss / (1024 * 1024)
             # print(f"\tMemory usage_2(loss): {memory_use}")
         grads = tape.gradient(loss_values, self.model.trainable_weights)
         process = psutil.Process(os.getpid())
         memory_use = process.memory_info().rss / (1024 * 1024)
-        # print(f"\tMemory usage_2 (grad): {memory_use}")
+        # print(f"\tMemory usage_2 (grad): {memory_use}")
         gc.collect()
         memory_use = process.memory_info().rss / (1024 * 1024)
         # print(f"\tMemory usage_2 (grad - after collect): {memory_use}")
         self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
-        self._loss_tracker_t1.update_state(losses_tracker['t1'])
-        self._loss_tracker_t2.update_state(losses_tracker['t2'])
-        self._loss_tracker_t3.update_state(losses_tracker['t3'])
+        self._loss_tracker_t1.update_state(losses_tracker["t1"])
+        self._loss_tracker_t2.update_state(losses_tracker["t2"])
+        self._loss_tracker_t3.update_state(losses_tracker["t3"])
         self.loss_tracker.update_state(loss_values)
         if self.__wandb:
             wandb.log(
                 {
-                    'lr': self._optimizer.learning_rate.numpy(),
-                    'epochs': epoch,
-                    'batch:': batch,
-                    'strike_loss': self._loss_tracker_t1.result(),
-                    'derivative_loss': self._loss_tracker_t2.result(),
-                    'steps_error_loss': self._loss_tracker_t3.result(),
-                    'overall_loss': self.loss_tracker.result(),
+                    "lr": self._optimizer.learning_rate.numpy(),
+                    "epochs": epoch,
+                    "batch:": batch,
+                    "strike_loss": self._loss_tracker_t1.result(),
+                    "derivative_loss": self._loss_tracker_t2.result(),
+                    "steps_error_loss": self._loss_tracker_t3.result(),
+                    "overall_loss": self.loss_tracker.result(),
                     # Overall derivatives
-                    'grads_magnitude': tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
-                    'analytical_grads': tf.reduce_mean(analytical_grads)
+                    "grads_magnitude": tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
+                    "analytical_grads": tf.reduce_mean(analytical_grads),
                 }
             )
-        return self.loss_tracker.result(), self._loss_tracker_t1.result(), self._loss_tracker_t2.result(), self._loss_tracker_t3.result()
-   
+        return (
+            self.loss_tracker.result(),
+            self._loss_tracker_t1.result(),
+            self._loss_tracker_t2.result(),
+            self._loss_tracker_t3.result(),
+        )
+
     def reset_trackers(self):
         # Reset trackers
         self._loss_tracker_t1.reset_state()
         self._loss_tracker_t2.reset_state()
         self._loss_tracker_t3.reset_state()
         self.loss_tracker.reset_state()
-        
+
     def plot_tracker_results(self, epoch: int):
-        print(f'Epoch {epoch} Mean loss {self.loss_tracker.result()}')
-        print(f'\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}')
+        print(f"Epoch {epoch} Mean loss {self.loss_tracker.result()}")
+        print(
+            f"\tPartial losses:\n\t\tStrike loss:{self._loss_tracker_t1.result()}\n\t\tDerivative loss: {self._loss_tracker_t2.result()}\n\t\tSteps loss: {self._loss_tracker_t3.result()}"
+        )
         process = psutil.Process(os.getpid())
         memory_use = process.memory_info().rss / (1024 * 1024)
         print(f"\tMemory usage: {memory_use}")
 
-    
     def get_losses_internal(self):
         """_summary_
 
         Returns:
             _type_: _description_
         """
-        return self._loss_tracker_t1.result(), self._loss_tracker_t2.result(), self._loss_tracker_t3.result()
-    
-    def export_model_architecture(self, dot_img_file = 'model_architectures/each_step_at_a_time.png'):
-        return tf.keras.utils.plot_model(self._custom_model, to_file=dot_img_file, show_shapes=True)
+        return (
+            self._loss_tracker_t1.result(),
+            self._loss_tracker_t2.result(),
+            self._loss_tracker_t3.result(),
+        )
+
+    def export_model_architecture(
+        self, dot_img_file="model_architectures/each_step_at_a_time.png"
+    ):
+        return tf.keras.utils.plot_model(
+            self._custom_model, to_file=dot_img_file, show_shapes=True
+        )
 
     @tf.function
     def _get_dv_dx(self, x: tf.Tensor):
-        samples = tf.cast(tf.shape(x)[0], dtype = tf.float64)
-        batch_size = samples // self.N
+        samples = tf.cast(tf.shape(x)[0], dtype=tf.float64)
         with tf.GradientTape() as tape:
             tape.watch(x)
             y = self._custom_model(x)
         grads = tape.gradient(y, x)
         if grads is not None:
-            grads_reshaped = tf.reshape(grads[:, 0], (batch_size, self.N))
+            grads_reshaped = tf.reshape(grads[:, 0], (self._batch_size, self.N))
             grads_prediction = grads[:, 0]
-            t_grads_reshaped = tf.reshape(grads[:, 1], (batch_size, self.N)) if grads.shape[1] > 1 else tf.zeros((batch_size, self.N))
-            t_grads_prediction = grads[:, 1] if grads.shape[1] > 1 else tf.zeros_like(x[:, 0])
+            t_grads_reshaped = (
+                tf.reshape(grads[:, 1], (self._batch_size, self.N))
+                if grads.shape[1] > 1
+                else tf.zeros((self._batch_size, self.N))
+            )
+            t_grads_prediction = (
+                grads[:, 1] if grads.shape[1] > 1 else tf.zeros_like(x[:, 0])
+            )
         else:
-            grads_reshaped = tf.zeros((batch_size, self.N))
+            grads_reshaped = tf.zeros((self._batch_size, self.N))
             grads_prediction = tf.zeros_like(x[:, 0])
-            t_grads_reshaped = tf.zeros((batch_size, self.N))
+            t_grads_reshaped = tf.zeros((self._batch_size, self.N))
             t_grads_prediction = tf.zeros_like(x[:, 0])
-
+        self._grads = grads_reshaped
         return grads_reshaped, grads_prediction, t_grads_reshaped, t_grads_prediction
 
     @tf.function
     def _get_dv_dxi(self, i):
+        print(f"Is self._grads None? {self._grads is None}")
         return self._grads[:, i] if self._grads is not None else None
-    
+
     @tf.function
-    def predict_tf(self, 
-        x:tf.Tensor, 
-        delta_x:tf.Tensor,
+    def predict_tf(
+        self,
+        x: tf.Tensor,
+        delta_x: tf.Tensor,
         build_masks: bool = False,
-        debug: bool = False
+        debug: bool = False,
     ):
         pass
 
-    def predict(self, 
-        x:tf.Tensor, 
-        delta_x:tf.Tensor,
-        build_masks: bool = False,
-        debug: bool = False
-    ):
-        pass
-    
-    def predict_loop(self,
-        x:tf.Tensor,
+    def predict(
+        self,
+        x: tf.Tensor,
         delta_x: tf.Tensor,
         build_masks: bool = False,
-        debug: bool = False
+        debug: bool = False,
     ):
         pass
-        
-    
-    # Save model 
+
+    def predict_loop(
+        self,
+        x: tf.Tensor,
+        delta_x: tf.Tensor,
+        build_masks: bool = False,
+        debug: bool = False,
+    ):
+        pass
+
+    # Save model
     def save_weights(self, path):
         self._custom_model.save_weights(path)
-        
-    # Save model 
+
+    # Save model
     def load_weights(self, path):
         self._custom_model.load_weights(path)
 
-    # Set device
-    def __set_device(self, device='cpu'):
-        if device.upper() == 'CPU':
-            tf.config.set_visible_devices([], 'GPU')
+    # Set device
+    def __set_device(self, device="cpu"):
+        if device.upper() == "CPU":
+            tf.config.set_visible_devices([], "GPU")
             print("[DEVICE] Using CPU")
-        elif device.upper() == 'GPU':
-            gpus = tf.config.list_physical_devices('GPU')
+        elif device.upper() == "GPU":
+            gpus = tf.config.list_physical_devices("GPU")
             if gpus:
                 try:
                     # Use the first GPU found
-                    tf.config.set_visible_devices(gpus[0], 'GPU')
-                    logical_gpus = tf.config.list_logical_devices('GPU')
+                    tf.config.set_visible_devices(gpus[0], "GPU")
+                    logical_gpus = tf.config.list_logical_devices("GPU")
                     print(f"[DEVICE] Physical GPU, {len(logical_gpus)}, Logical GPU")
                 except RuntimeError as e:
                     # Visible devices must be set before GPUs have been initialized
                     print(e)
             else:
                 print("[DEVICE] No GPU found, using CPU instead.")
-                tf.config.set_visible_devices([], 'GPU')
+                tf.config.set_visible_devices([], "GPU")
         else:
             raise ValueError("[DEVICE] Unrecognized device. Use 'CPU' or 'GPU'.")
