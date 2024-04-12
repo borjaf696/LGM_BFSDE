@@ -84,6 +84,10 @@ def parse_args():
     parser.add_argument("--device", type=str, help="Device to be used", default="cpu")
     # Wandb Tracker
     parser.add_argument("--wandb", type=bool, help="Wandb", default=False)
+    # Test
+    parser.add_argument(
+        "--test", type=bool, help="Do Testing", default=True
+    )
     args = parser.parse_args()
 
     if args.TM is None and args.phi != "zerobond":
@@ -145,6 +149,7 @@ if __name__ == "__main__":
     print(f"\tX0: {X0}")
     print(f"\tSigma: {sigma}")
     print(f"\tDevice: {args.device}")
+    print(f"\tLaunch test: {args.test}")
     # tf model training
     phi_str = args.phi
     # Imprime los valores de los argumentos

@@ -93,7 +93,7 @@ def trainer(
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
-    size_of_the_batch = 16
+    size_of_the_batch = 64
     # Recalculate nsims
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
@@ -160,9 +160,9 @@ def trainer(
     )
     # Model name
     if TM is not None:
-        model_name = f"models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.h5"
+        model_name = f"models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.weights.h5"
     else:
-        model_name = f"models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize{normalize}_step_{T}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.h5"
+        model_name = f"models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize{normalize}_step_{T}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.weights.h5"
     # lgm_single_step.export_model_architecture()
     try:
         lgm_single_step.load_weights(model_name)
@@ -220,8 +220,6 @@ def trainer(
             delta_x = tf.Variable(delta_x_batch, trainable=False, dtype=tf.float64)
             loss, _, _, _ = lgm_single_step.custom_train_step_tf(
                 x=x,
-                batch=batch,
-                epoch=epoch,
                 delta_x=delta_x,
             )
             process = psutil.Process(os.getpid())

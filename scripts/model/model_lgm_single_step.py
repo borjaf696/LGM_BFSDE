@@ -250,9 +250,15 @@ class LgmSingleStep(tf.keras.Model):
     def learning_rate(self, learning_rate):
         self._optimizer.learning_rate.assign(learning_rate)
 
-    @tf.function(reduce_retracing=True)
+    @tf.function(
+        reduce_retracing=True, 
+        input_signature=[
+            tf.TensorSpec(shape=(None, None), dtype=tf.float64),
+            tf.TensorSpec(shape=(None, None), dtype=tf.float64)
+        ]
+    )
     def custom_train_step_tf(
-        self, x: tf.Tensor, batch: int, epoch: int, delta_x: tf.Tensor
+        self, x: tf.Tensor, delta_x: tf.Tensor
     ):
         with tf.GradientTape(persistent=False) as tape:
             v, predictions, grads = self.predict_tf(x, delta_x=delta_x)
@@ -400,21 +406,22 @@ class LgmSingleStep(tf.keras.Model):
             tape.watch(x)
             y = self.custom_model(x)
         grads = tape.gradient(y, x)
+        samples = tf.cast(tf.cast(tf.shape(x)[0], tf.float64) / self.N, tf.float64)
         if grads is not None:
-            grads_reshaped = tf.reshape(grads[:, 0], (self.batch_size, self.N))
+            grads_reshaped = tf.reshape(grads[:, 0], (samples, self.N))
             grads_prediction = grads[:, 0]
             t_grads_reshaped = (
-                tf.reshape(grads[:, 1], (self.batch_size, self.N))
+                tf.reshape(grads[:, 1], (samples, self.N))
                 if grads.shape[1] > 1
-                else tf.zeros((self.batch_size, self.N))
+                else tf.zeros((samples, self.N))
             )
             t_grads_prediction = (
                 grads[:, 1] if grads.shape[1] > 1 else tf.zeros_like(x[:, 0])
             )
         else:
-            grads_reshaped = tf.zeros((self.batch_size, self.N))
+            grads_reshaped = tf.zeros((samples, self.N))
             grads_prediction = tf.zeros_like(x[:, 0])
-            t_grads_reshaped = tf.zeros((self.batch_size, self.N))
+            t_grads_reshaped = tf.zeros((samples, self.N))
             t_grads_prediction = tf.zeros_like(x[:, 0])
         self.grads = grads_reshaped
         return grads_reshaped, grads_prediction, t_grads_reshaped, t_grads_prediction

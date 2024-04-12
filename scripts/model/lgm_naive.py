@@ -20,12 +20,14 @@ class LgmSingleStepNaive(LgmSingleStep):
         v = predictions_rolled + grads_rolled * delta_x
 
         if build_masks:
-            idx_preds = tf.range(0, tf.shape(X)[0], self.N)
+            idx_preds = tf.reshape(
+                tf.range(0, tf.shape(X)[0], self.N, dtype=tf.int64), (-1, 1)
+            )
             np_mask_v = tf.ones((tf.shape(X)[0], 1), dtype=tf.float64)
             np_mask_v = tf.tensor_scatter_nd_update(
                 np_mask_v,
                 tf.reshape(idx_preds, (-1, 1)),
-                tf.zeros(tf.shape(idx_preds)[0], dtype=tf.float64),
+                tf.zeros_like(idx_preds, dtype=tf.float64),
             )
             mask_v = np_mask_v
             mask_preds = 1 - np_mask_v

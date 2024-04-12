@@ -16,7 +16,7 @@ class Tester(ABC):
         mc_paths_tranformed = df[features].values
         x = tf.convert_to_tensor(mc_paths_tranformed.astype(np.float64))
         delta_x = tf.convert_to_tensor(df.delta_x_0.values.astype(np.float64))
-        v_lgm_single_step, _ = model.predict(x, delta_x, build_masks=True)
+        v_lgm_single_step, _, _ = model.predict_tf(x, delta_x, build_masks=True)
         # TODO: denormalize
         results = pd.DataFrame(zip(v_lgm_single_step), columns=["results"])
         v_lgm_single_step = results.explode("results").values
