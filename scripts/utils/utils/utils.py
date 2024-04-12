@@ -46,7 +46,6 @@ class CyclicLR(tf.keras.optimizers.schedules.LearningRateSchedule):
 
 class TFUtils:
     @staticmethod
-    @tf.function
     def custom_reshape(tensor):
         tensor_shape = tf.shape(tensor)
         tensor_rank = tf.size(tensor_shape)
@@ -446,7 +445,6 @@ class ZeroBond:
 
 class Swap:
     @staticmethod
-    @tf.function
     def anuality_swap(xn, t, T, TN, ct, period=6):
         tau = tf.cast(TAUS[period], dtype=tf.float64)
         time_add = tf.cast(TIMES[period], dtype=tf.float64)
@@ -749,7 +747,6 @@ class Swaption:
         return Swaption.Swaption_test(xn, T, T, Tm, ct, period, K)
 
     @staticmethod
-    @tf.function
     def Swaption_normalized(xn, T, Tm, ct, period=6, K=0.03):
         positive_par_swap = Swap.positive_parswap_tf(
             xn=xn, Ti=T, Tm=Tm, ct=ct, period=period, K=K

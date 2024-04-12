@@ -331,7 +331,6 @@ class ZeroBond:
         return np.exp(-0.5 * ZeroBond.H(T) ** 2 * ct - ZeroBond.H(T) * xt)
 
     @staticmethod
-    @tf.function
     def Z_normalized(xn, tn, T, ct):
         """_summary_
         Args:
@@ -348,7 +347,6 @@ class ZeroBond:
 
 class IRS:
     @staticmethod
-    @tf.function
     def IRS(xn, T, TN, ct, period=6, K=0.03):
         tau = TAUS[period]
         time_add = TIMES[period]
@@ -362,7 +360,6 @@ class IRS:
         return variable + fixed
 
     @staticmethod
-    @tf.function
     def IRS_normalized(xn, T, TN, ct, period=6, K=0.03):
         tau = TAUS[period]
         time_add = TIMES[period]
@@ -549,7 +546,6 @@ class Swaption:
         return first_term + second_term + third_term
 
     @staticmethod
-    @tf.function
     def Swaption(xn, T, TN, ct, period=6, K=0.03):
         tau = TAUS[period]
         time_add = TIMES[period]
@@ -569,7 +565,6 @@ class Swaption:
         return tf.reduce_max(tensor_irs, axis=1)
 
     @staticmethod
-    @tf.function
     def Swaption_normalized(xn, T, TN, ct, period=6, K=0.03):
         tau = TAUS[period]
         time_add = TIMES[period]

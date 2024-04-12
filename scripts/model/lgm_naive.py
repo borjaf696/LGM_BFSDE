@@ -6,9 +6,8 @@ from scripts.model.model_lgm_single_step import LgmSingleStep
 
 class LgmSingleStepNaive(LgmSingleStep):
 
-    @tf.function
     def predict_tf(self, X: tf.Tensor, delta_x: tf.Tensor, build_masks: bool = False):
-        predictions = self._custom_model(X)
+        predictions = self.custom_model(X)
         predictions = tf.cast(predictions, dtype=tf.float64)
         predictions_rolled = tf.roll(predictions, shift=1, axis=0)
 
@@ -46,7 +45,7 @@ class LgmSingleStepNaive(LgmSingleStep):
         debug: bool = False,
         device: str = "cpu",
     ):
-        predictions = self._custom_model(X)
+        predictions = self.custom_model(X)
         predictions = tf.cast(predictions, dtype=tf.float64)
         predictions_rolled = tf.roll(predictions, shift=1, axis=0)
 
@@ -91,7 +90,7 @@ class LgmSingleStepNaive(LgmSingleStep):
         Returns:
             _type_: _description_
         """
-        predictions = self._custom_model(X)
+        predictions = self.custom_model(X)
         if debug:
             print(f"Predictions shape: {predictions.shape}")
             print(f"Predictions: {predictions}")
@@ -116,5 +115,4 @@ class LgmSingleStepNaive(LgmSingleStep):
         return v, predictions
 
     def clear_memory(self):
-        tf.keras.backend.clear_session()
         gc.collect()
