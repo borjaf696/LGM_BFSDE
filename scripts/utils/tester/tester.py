@@ -175,7 +175,7 @@ class ToyExample(Tester):
 
         df = super()._calculate_basics(df, model, sigma_value)
         df["V"] = df.apply(
-            lambda x: TestExamples.test_function(x.xt, x["dt"], T), axis=1
+            lambda x: TestExamples.toy_test_function(x.xt, x["dt"], T), axis=1
         )
         df["V_normalized"] = df.apply(
             lambda x: ZeroBond.Z_norm(x.xt, x["dt"], T, x.ct), axis=1

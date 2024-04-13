@@ -218,7 +218,7 @@ def trainer(
             # print(f"\n\tMemory usage_1 (trainer): {memory_use}")
             x = tf.Variable(x_batch, trainable=True, dtype=tf.float64)
             delta_x = tf.Variable(delta_x_batch, trainable=False, dtype=tf.float64)
-            loss, _, _, _ = lgm_single_step.custom_train_step_tf(
+            loss, _, _, _ = lgm_single_step.custom_train_step(
                 x=x,
                 delta_x=delta_x,
             )

@@ -51,7 +51,7 @@ class LgmSingleStepNaive(LgmSingleStep):
         predictions = tf.cast(predictions, dtype=tf.float64)
         predictions_rolled = tf.roll(predictions, shift=1, axis=0)
 
-        grads = self._get_dv_dx(X)[1]
+        grads_reshaped, grads, _, _= self._get_dv_dx(X)
         grads_rolled = tf.roll(grads, shift=1, axis=0)
 
         grads_rolled = tf.reshape(grads_rolled, (tf.shape(grads)[0], 1))
@@ -75,7 +75,7 @@ class LgmSingleStepNaive(LgmSingleStep):
 
         v = v * mask_v + predictions * mask_preds
 
-        return v, predictions
+        return v, predictions, grads_reshaped
 
     def predict_loop(
         self,

@@ -1,5 +1,9 @@
 import tensorflow as tf
 
+print("TensorFlow version:", tf.__version__)
+print("Is GPU available:", len(tf.config.list_physical_devices("GPU")) > 0)
+
+
 gpus = tf.config.experimental.list_physical_devices("GPU")
 if gpus:
     try:
@@ -10,4 +14,6 @@ if gpus:
         print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPUs")
     except RuntimeError as e:
         # Memory growth must be set before GPUs have been initialized
-        print(e)
+        print(f"Error: {e}")
+else:
+    print(f"No GPUs detected")

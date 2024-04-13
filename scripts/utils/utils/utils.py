@@ -758,7 +758,7 @@ class Swaption:
 class TestExamples:
 
     @staticmethod
-    def test_function(x: np.array, t: np.array, T: int, r: float, sigma: float):
+    def toy_test_function(x: np.array, t: np.array, T: int, r: float, sigma: float):
         difference = T - t
         exponential = np.exp((r + sigma) * difference)
         norma = np.linalg(x, axis=0)

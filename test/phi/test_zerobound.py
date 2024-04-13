@@ -1,3 +1,8 @@
+import sys, os
+
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+sys.path.append(root_path)
+
 import pytest
 import tensorflow as tf
 import pandas as pd

@@ -79,18 +79,18 @@ class LgmSingleStep(tf.keras.Model):
         # Phi function
         self.phi = phi
         # Type of active
-        self.name = name
+        self.name_internal = name
         # Constantes:
         print(f"{'#'*100}")
         print(f"Strike time (T): {T}")
         print(f"Second strike time (TM): {self.future_T}")
         print(f"Number of steps per path: {n_steps}")
-        print(f"Model name: {self.name}")
+        print(f"Model name: {self.name_internal}")
         print(f"Batch size: {self.batch_size}")
         print(f"Expected sample size: {self.expected_sample_size}")
         print(f"{'#'*100}")
         # Model with time and value
-        input_tmp = keras.Input(shape=(dim,), name=self.name)
+        input_tmp = keras.Input(shape=(dim,), name=self.name_internal)
         if normalize:
             # Normalizer
             start_normalization_time = time.time()
@@ -474,7 +474,7 @@ class LgmSingleStep(tf.keras.Model):
             if gpus:
                 try:
                     # Use the first GPU found
-                    tf.config.set_visible_devices(gpus[0], "GPU")
+                    # tf.config.set_visible_devices(gpus[0], "GPU")
                     logical_gpus = tf.config.list_logical_devices("GPU")
                     print(f"[DEVICE] Physical GPU, {len(logical_gpus)}, Logical GPU")
                 except RuntimeError as e:

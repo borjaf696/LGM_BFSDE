@@ -1,3 +1,10 @@
+import sys, os
+
+root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+sys.path.append(root_path)
+valid_paths = [p for p in sys.path if os.path.exists(p)]
+print(f"Valid paths: {valid_paths}")
+
 import pytest
 import tensorflow as tf
 from scripts.model.lgm_naive import LgmSingleStepNaive
