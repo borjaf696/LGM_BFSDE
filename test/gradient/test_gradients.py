@@ -48,6 +48,7 @@ def test_model_gradients_respect_x(params, x):
         report_to_wandb=params["report_to_wandb"],
         normalize=params["normalize"],
         data_sample=params["data_sample"],
+        device = "gpu"
     )
     _, grads_x, _, grads_t = lgm._get_dv_dx(x)
     custom_grads = MathUtils.central_difference_gradients(x, lgm._custom_model)

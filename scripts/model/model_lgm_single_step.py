@@ -72,6 +72,7 @@ class LgmSingleStep(tf.keras.Model):
         # Training relevant attributes
         self.N = tf.constant(n_steps, dtype=tf.float64)
         self.T = tf.constant(T, dtype=tf.float64)
+        self.normalize = normalize
         # Same for actives with out future
         self.future_T = tf.constant(future_T, dtype=tf.float64)
         self.batch_size = tf.constant(batch_size, dtype=tf.float64)
@@ -91,18 +92,19 @@ class LgmSingleStep(tf.keras.Model):
         print(f"{'#'*100}")
         # Model with time and value
         input_tmp = keras.Input(shape=(dim,), name=self.name_internal)
-        if normalize:
+        if self.normalize:
             # Normalizer
             start_normalization_time = time.time()
-            normalizer = Normalization()
-            normalizer.adapt(data_sample)
-            x = normalizer(input_tmp)
+            self.mean = tf.reduce_mean(data_sample, axis=0)
+            self.std = tf.math.reduce_std(data_sample, axis=0)
+            print(f"[Normalization] Mean: {self.mean}")
+            print(f"[Normalization] Std: {self.std}")
             end_normalization_time = time.time()
             print(
-                f"Normalization time: {end_normalization_time - start_normalization_time}s"
+                f"[Normalization] Normalization time: {end_normalization_time - start_normalization_time}s"
             )
-        else:
-            x = input_tmp
+        # Set first layer
+        x = input_tmp
         # Configuration read from:
         # --- name
         # --- T, strike time

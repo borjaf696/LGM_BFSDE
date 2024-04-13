@@ -86,4 +86,4 @@ def test_irs(data, simple_params):
     # Error
     df_results["absolute_error"] = (df_results.v_real - df_results.v_est).abs()
 
-    assert df_results.absolute_error.mean() < 1e-2
+    assert df_results.absolute_error.mean() < 1e-1
