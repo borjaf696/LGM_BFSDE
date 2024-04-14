@@ -13,6 +13,7 @@ import pandas as pd
 
 # Simulator
 from utils.simulator.simulator import MCSimulation
+from utils.utils.utils import GPUUtils
 from utils.preprocess.preprocess import Preprocessor
 
 from utils.utils.utils import ZeroBond, IRS, Swaption, TestExamples, Utils
@@ -165,6 +166,8 @@ if __name__ == "__main__":
     print(f"Simulate per epoch: {simulate_per_epoch}")
     # Schema selected:
     print(f"Schema: {args.schema}")
+    # Set the device
+    GPUUtils.set_device(args.device)
     # Epochs
     epochs = args.nepochs
     # Train the model
@@ -183,7 +186,7 @@ if __name__ == "__main__":
         schema=args.schema,
         save_model=args.save,
         simulate_in_epoch=args.simulate_in_epoch,
-        device=args.device,
+        device = args.device
     )
     # Test
     if args.test:

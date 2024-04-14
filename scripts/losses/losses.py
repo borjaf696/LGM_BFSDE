@@ -70,12 +70,13 @@ class Losses:
             t1=real_values, t2=predictions[:, -1], L1=L1, L2=L2
         )
         strike_loss = tf.reduce_sum(strike_loss) / tf.cast(batch_size, dtype=tf.float64)
-
-        with tf.GradientTape() as tape:
-            tape.watch(x_reformat[:, -1])
-            y = phi(xn=x_reformat[:, -1], T=T, Tm=TM, ct=ct)
-        grad_df = tape.gradient(y, x_reformat[:, -1])
-        df_dxn = grad_df if grad_df is not None else 0.0 * x_reformat[:, -1]
+        
+        xn = x_reformat[:, -1]
+        with tf.GradientTape(persistent = False) as tape:
+            tape.watch(xn)
+            y = phi(xn=xn, T=T, Tm=TM, ct=ct)
+        grad_df = tape.gradient(y, {"xn": xn})["xn"]
+        df_dxn = grad_df if grad_df is not None else 0.0 * xn
 
         derivative_loss = Losses.get_loss(t1=derivatives, t2=df_dxn, L1=L1, L2=L2)
         derivative_loss = tf.reduce_sum(derivative_loss) / tf.cast(
@@ -109,81 +110,97 @@ class Losses:
         return loss_per_sample, losses_trackers, df_dxn
 
     @staticmethod
-    def loss_lgm(
-        x: tf.Tensor,
-        v: tf.Tensor,
+    def loss_lgm( 
+        x: tf.Tensor, 
+        v: tf.Tensor, 
         ct: tf.Tensor,
-        derivatives: tf.Tensor,
-        predictions: tf.Tensor,
-        N_steps: np.int64,
+        derivatives: tf.Tensor, 
+        predictions: tf.Tensor, 
+        N_steps: np.int64, 
         T: int = None,
         TM: int = None,
         phi: Any = None,
+        batch_size: tf.float64 = None,
     ):
-        # Loss functions
         L1 = tf.math.abs
         L2 = tf.math.squared_difference
         betas = [1.0, 1.0, 1.0]
         samples, _ = x.shape
         batch_size = int(np.floor(samples / N_steps))
-        # For f and f'
         x_reformat = tf.reshape(x[:, 0], (batch_size, N_steps))
-        # Loss given the strike function
+        xn_tensor = x_reformat[:, -1]
         T = np.float64(T)
         TM = np.float64(TM)
-        real_values = phi(xn=x_reformat[:, -1], T=T, Tm=TM, ct=ct)
-        # Strike loss
+        real_values = phi(
+            xn = xn_tensor, 
+            T = T,
+            Tm = TM,
+            ct = ct
+        )
         strike_loss = Losses.get_loss(
-            t1=real_values, t2=predictions[:, -1], L1=L1, L2=L2
+            t1 = real_values,
+            t2 = predictions[: , -1],
+            L1 = L1,
+            L2 = L2
         )
         strike_loss = tf.reduce_sum(strike_loss) / batch_size
-        # Autodiff phi
-
-        xn = tf.Variable(x_reformat[:, -1], name="xn", trainable=True)
-        T = tf.Variable(np.float64(T), name="tn", trainable=False)
-        TM = tf.Variable(np.float64(TM), name="ct", trainable=False)
-        ct = tf.Variable(np.float64(ct), name="ct", trainable=False)
-        # T = tf.Variable(np.float64(T), name = 'T', trainable=False)
-        import os, psutil
-
-        process = psutil.Process(os.getpid())
-        memory_use = process.memory_info().rss / (1024 * 1024)
-        # print(f"\tMemory usage_1(loss - grad): {memory_use}")
-        with tf.GradientTape(persistent=False) as tape:
-            y = phi(xn=xn, T=T, Tm=TM, ct=ct)
-        memory_use = process.memory_info().rss / (1024 * 1024)
-        # print(f"\tMemory usage_2(loss - grad): {memory_use}")
-        grad_df = tape.gradient(y, {"xn": xn})
-        memory_use = process.memory_info().rss / (1024 * 1024)
-        # print(f"\tMemory usage_3(loss - grad): {memory_use}")
-        df_dxn = grad_df["xn"] if grad_df["xn"] is not None else 0.0 * xn
-        memory_use = process.memory_info().rss / (1024 * 1024)
-        # print(f"\tMemory usage_4(loss - grad): {memory_use}")
-        # Derivative loss
-        derivative_loss = Losses.get_loss(t1=derivatives, t2=df_dxn, L1=L1, L2=L2)
+        xn = tf.Variable(xn_tensor, name = 'xn', trainable = True)
+        T = tf.Variable(np.float64(T), name = 'tn', trainable=False)
+        TM = tf.Variable(np.float64(TM), name = 'ct', trainable=False)
+        ct = tf.Variable(np.float64(ct), name = 'ct', trainable=False)
+        with tf.GradientTape() as tape:
+            y = phi(
+                xn = xn, 
+                T = T, 
+                Tm = TM, 
+                ct = ct
+            )
+        grad_df = tape.gradient(
+            y, 
+            {
+                'xn': xn   
+            }
+        )
+        df_dxn = grad_df['xn'] if grad_df['xn'] is not None else 0. * xn
+        derivative_loss = Losses.get_loss(
+            t1 = derivatives,
+            t2 = df_dxn,
+            L1 = L1,
+            L2 = L2
+        )
         derivative_loss = tf.reduce_sum(derivative_loss) / batch_size
-        # Epoch error per step
         og_shape = v.shape
         v = tf.reshape(v, [-1])
         predictions = tf.reshape(predictions, [-1])
-        step_loss = Losses.get_loss(t1=v, t2=predictions, L1=L1, L2=L2)
+        step_loss = Losses.get_loss(
+            t1 = v,
+            t2 = predictions,
+            L1 = L1,
+            L2 = L2
+        )
         step_loss = tf.reshape(step_loss, og_shape)
-        error_per_step = tf.cumsum(step_loss[:, 1:], axis=1)
-        # Reduce sum the cumulative error
-        error_per_step = tf.reduce_sum(error_per_step[:, -2] / N_steps / batch_size)
-        # Weigth the errors
+        error_per_step = tf.cumsum(
+            step_loss[:, 1:],
+            axis = 1
+        )
+        error_per_step = tf.reduce_sum(
+            error_per_step[:, -2] / N_steps / batch_size
+        )
         strike_loss *= betas[0]
         derivative_loss *= betas[1]
         error_per_step *= betas[2]
-
-        # Record internal losses
+        
         losses_trackers = {
-            "t1": strike_loss,
-            "t2": derivative_loss,
-            "t3": error_per_step,
+            't1': strike_loss,
+            't2': derivative_loss,
+            't3': error_per_step
         }
-
+        
         loss_per_sample = tf.math.add(
-            error_per_step, tf.math.add(strike_loss, derivative_loss)
+            error_per_step, 
+            tf.math.add(
+                strike_loss, 
+                derivative_loss
+            )
         )
         return loss_per_sample, losses_trackers, df_dxn

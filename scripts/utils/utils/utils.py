@@ -819,3 +819,28 @@ class VisualizationHelper:
 
         # Mostrar el gráfico
         plt.show()
+
+
+class GPUUtils:
+    
+    @staticmethod
+    def set_device(device = "cpu"):
+        if device.upper() == "CPU":
+            tf.config.set_visible_devices([], "GPU")
+            print("[DEVICE] Using CPU")
+        elif device.upper() == "GPU":
+            gpus = tf.config.list_physical_devices("GPU")
+            if gpus:
+                try:
+                    # Use the first GPU found
+                    tf.config.set_visible_devices(gpus[1], "GPU")
+                    logical_gpus = tf.config.list_logical_devices("GPU")
+                    print(f"[DEVICE] Physical GPU, {len(logical_gpus)}, Logical GPU")
+                    print(f"[DEVICE] Set device GPU: {gpus[1]}")
+                except RuntimeError as e:
+                    print(e)
+            else:
+                print("[DEVICE] No GPU found, using CPU instead.")
+                tf.config.set_visible_devices([], "GPU")
+        else:
+            raise ValueError("[DEVICE] Unrecognized device. Use 'CPU' or 'GPU'.")

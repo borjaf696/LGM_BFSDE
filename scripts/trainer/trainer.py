@@ -65,7 +65,7 @@ def trainer(
     schema: int = 1,
     save_model: bool = False,
     simulate_in_epoch: bool = False,
-    device: str = "cpu",
+    device: str = "cpu"
 ):
     # Start tracer
     tracemalloc.start()
@@ -93,7 +93,7 @@ def trainer(
     # Fixed for now
     epochs = epochs
     # Batch execution with baby steps
-    size_of_the_batch = 64
+    size_of_the_batch = 32
     # Recalculate nsims
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
@@ -123,7 +123,7 @@ def trainer(
             report_to_wandb=report_to_wandb,
             normalize=normalize,
             data_sample=x0,
-            device=device,
+            device = device
         )
     elif schema == 2:
         lgm_single_step = LgmSingleStepModelAdjusted(
@@ -216,9 +216,9 @@ def trainer(
             process = psutil.Process(os.getpid())
             memory_use = process.memory_info().rss / (1024 * 1024)
             # print(f"\n\tMemory usage_1 (trainer): {memory_use}")
-            x = tf.Variable(x_batch, trainable=True, dtype=tf.float64)
-            delta_x = tf.Variable(delta_x_batch, trainable=False, dtype=tf.float64)
-            loss, _, _, _ = lgm_single_step.custom_train_step_tf(
+            x = tf.cast(x_batch, dtype=tf.float64)
+            delta_x = tf.cast(delta_x_batch, dtype=tf.float64)
+            loss, _, _, _ = lgm_single_step.fit_step(
                 x=x,
                 delta_x=delta_x,
             )

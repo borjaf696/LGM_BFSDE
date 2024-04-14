@@ -13,7 +13,7 @@ class LgmSingleStepNaive(LgmSingleStep):
         predictions = tf.cast(predictions, dtype=tf.float64)
         predictions_rolled = tf.roll(predictions, shift=1, axis=0)
 
-        grads_reshaped, grads, _, _= self._get_dv_dx(X)
+        grads_reshaped, grads, _, _= self._get_dv_dx_tf(X)
         grads_rolled = tf.roll(grads, shift=1, axis=0)
 
         grads_rolled = tf.reshape(grads_rolled, (tf.shape(grads)[0], 1))
@@ -40,43 +40,70 @@ class LgmSingleStepNaive(LgmSingleStep):
         v = v * mask_v + predictions * mask_preds
 
         return v, predictions, grads_reshaped
-
-    def predict(
-        self,
-        X: tf.Tensor,
-        delta_x: tf.Tensor,
+    
+    def predict(self, 
+        X:tf.Tensor, 
+        delta_x:tf.Tensor,
         build_masks: bool = False,
-        debug: bool = False,
-        device: str = "cpu",
+        debug: bool = False
     ):
+        if self.normalize:
+            X = (X - self.mean) / self.std
         predictions = self.custom_model(X)
-        predictions = tf.cast(predictions, dtype=tf.float64)
-        predictions_rolled = tf.roll(predictions, shift=1, axis=0)
-
+        if debug:
+            print(f'Predictions shape: {predictions.shape}')
+            print(f'Predictions: {predictions}')
+        predictions = tf.cast(
+            predictions, 
+            dtype=tf.float64
+        )
+        predictions_rolled = tf.roll(
+            predictions,
+            shift = 1,
+            axis = 0
+        )
         grads_reshaped, grads, _, _= self._get_dv_dx(X)
-        grads_rolled = tf.roll(grads, shift=1, axis=0)
-
-        grads_rolled = tf.reshape(grads_rolled, (tf.shape(grads)[0], 1))
-        delta_x = tf.reshape(delta_x, (tf.shape(delta_x)[0], 1))
-
-        v = predictions_rolled + grads_rolled * delta_x
-
-        if build_masks:
-            idx_preds = tf.range(0, tf.shape(X)[0], self.N)
-            np_mask_v = tf.ones((tf.shape(X)[0], 1))
-            np_mask_v = tf.tensor_scatter_nd_update(
-                np_mask_v,
-                tf.reshape(idx_preds, (-1, 1)),
-                tf.zeros(tf.shape(idx_preds)[0]),
+        grads_rolled = tf.roll(
+            grads,
+            shift = 1,
+            axis = 0
+        )
+        grads_rolled = tf.reshape(grads_rolled, (grads.shape[0], 1))
+        delta_x = tf.reshape(delta_x, (delta_x.shape[0], 1))
+        v = tf.math.add(
+            predictions_rolled,
+            tf.math.multiply(
+                grads_rolled,
+                delta_x
             )
-            mask_v = np_mask_v
-            mask_preds = 1 - np_mask_v
-        else:
+        )
+        if not build_masks:
             mask_v = self._mask_v
             mask_preds = self._mask_preds
-
-        v = v * mask_v + predictions * mask_preds
-
+        else:
+            idx_preds = np.array(range(0, X.shape[0], self.N))
+            np_mask_v = np.ones((X.shape[0], 1))
+            np_mask_v[idx_preds] = 0
+            mask_v = tf.convert_to_tensor(
+                np_mask_v, 
+                dtype = tf.float64
+            )
+            mask_preds = tf.abs(
+                tf.convert_to_tensor(
+                    np_mask_v,
+                    dtype = tf.float64
+                ) - 1)
+        v = tf.math.add(
+            tf.math.multiply(
+                v,
+                mask_v
+            ),
+            tf.math.multiply(
+                predictions,
+                mask_preds
+            )
+        )
+        
         return v, predictions, grads_reshaped
 
     def predict_loop(

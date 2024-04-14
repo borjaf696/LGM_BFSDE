@@ -52,7 +52,7 @@ class LgmSingleStep(tf.keras.Model):
         normalize=False,
         # First simulation
         data_sample=None,
-        device="cpu",
+        device = "cpu",
         **kwargs,
     ):
         """_summary_
@@ -67,12 +67,11 @@ class LgmSingleStep(tf.keras.Model):
             phi (_type_, optional): _description_. Defaults to None.
         """
         super(LgmSingleStep, self).__init__(name=name, **kwargs)
-        # Set device to gpu
-        self.__set_device(device=device)
         # Training relevant attributes
         self.N = tf.constant(n_steps, dtype=tf.float64)
         self.T = tf.constant(T, dtype=tf.float64)
         self.normalize = normalize
+        self.device = device
         # Same for actives with out future
         self.future_T = tf.constant(future_T, dtype=tf.float64)
         self.batch_size = tf.constant(batch_size, dtype=tf.float64)
@@ -247,26 +246,34 @@ class LgmSingleStep(tf.keras.Model):
         """
         if optimizer == "adam":
             print(f"Optimizer set to {optimizer}")
-            self._optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+            self.optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
     def learning_rate(self, learning_rate):
-        self._optimizer.learning_rate.assign(learning_rate)
+        self.optimizer.learning_rate.assign(learning_rate)
+        
+    def fit_step(self, x: tf.Tensor, delta_x: tf.Tensor):
+        return (
+            self.custom_train_step_tf(x = x, delta_x = delta_x) 
+            if self.device == "gpu" else 
+            self.custom_train_step(x = x, delta_x = delta_x)
+        )
 
     @tf.function(
         reduce_retracing=True, 
         input_signature=[
             tf.TensorSpec(shape=(None, None), dtype=tf.float64),
-            tf.TensorSpec(shape=(None, None), dtype=tf.float64)
+            tf.TensorSpec(shape=(None, None), dtype=tf.float64),
+            tf.TensorSpec(shape=(), dtype=tf.bool)  
         ]
     )
     def custom_train_step_tf(
-        self, x: tf.Tensor, delta_x: tf.Tensor
+        self, x: tf.Tensor, delta_x: tf.Tensor, apply_gradients: tf.bool = True
     ):
         with tf.GradientTape(persistent=False) as tape:
             v, predictions, grads = self.predict_tf(x, delta_x=delta_x)
             v = tf.reshape(v, (self.batch_size, self.N))
             predictions = tf.reshape(predictions, (self.batch_size, self.N))
-            loss_values, losses_tracker, analytical_grads = Losses.loss_lgm_tf(
+            loss_values, losses_tracker, _ = Losses.loss_lgm_tf(
                 x=x,
                 v=v,
                 ct=self.ct,
@@ -279,7 +286,8 @@ class LgmSingleStep(tf.keras.Model):
                 phi=self.phi,
             )
         grads = tape.gradient(loss_values, self.model.trainable_weights)
-        self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
+        if apply_gradients:
+            self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
         self.loss_tracker_t1.update_state(losses_tracker["t1"])
         self.loss_tracker_t2.update_state(losses_tracker["t2"])
         self.loss_tracker_t3.update_state(losses_tracker["t3"])
@@ -291,81 +299,53 @@ class LgmSingleStep(tf.keras.Model):
             self.loss_tracker_t3.result(),
         )
 
-    def custom_train_step(
-        self, x: tf.Tensor, batch: int, epoch: int, delta_x: tf.Tensor
-    ):
-        """_summary_
-
-        Args:
-            X (_type_): _description_
-            y (_type_, optional): _description_. Defaults to None.
-            epoch (int, optional): _description_. Defaults to 0.
-
-        Returns:
-            _type_: _description_
-        """
-        import os, psutil
-
-        process = psutil.Process(os.getpid())
-        memory_use = process.memory_info().rss / (1024 * 1024)
-        # print(f"\tMemory usage_1(grad): {memory_use}")
-        batch_size = tf.shape(x)[0] // self.N
-        # Define the tf variables for tape
-        with tf.GradientTape(persistent=False) as tape:
-            memory_use = process.memory_info().rss / (1024 * 1024)
-            # print(f"\tMemory usage_1(pred): {memory_use}")
-            v, predictions = self.predict(x, delta_x=delta_x)
-            memory_use = process.memory_info().rss / (1024 * 1024)
-            # print(f"\tMemory usage_2(pred): {memory_use}")
+    def custom_train_step(self, x, batch = 1, epoch = 1, delta_x = None, apply_gradients = True):
+        first_dim, _ = x.shape
+        batch_size = np.int64(first_dim / self.N)
+        x = tf.constant(x)
+        with tf.GradientTape() as tape:
+            v, predictions, _ = self.predict(x, delta_x = delta_x)
             v = tf.reshape(v, (batch_size, self.N))
             predictions = tf.reshape(predictions, (batch_size, self.N))
-            memory_use = process.memory_info().rss / (1024 * 1024)
-            # print(f"\tMemory usage_1(loss): {memory_use}")
-            loss_values, losses_tracker, analytical_grads = self.loss_lgm(
-                x=x,
-                v=v,
-                ct=self.ct,
-                derivatives=self._get_dv_dxi(self.N - 1),
-                predictions=predictions,
-                N_steps=self.N,
-                T=self.T,
-                TM=self.future_T,
-                phi=self.phi,
+            loss_values, losses_tracker, analytical_grads = Losses.loss_lgm(
+                x = x, 
+                v = v,
+                ct = self.ct,
+                derivatives = self._get_dv_dxi(tf.cast(self.N - 1, tf.int32)),  
+                predictions = predictions, 
+                N_steps = self.N,
+                T = self.T,
+                TM = self.future_T,
+                phi = self.phi
             )
-            memory_use = process.memory_info().rss / (1024 * 1024)
-            # print(f"\tMemory usage_2(loss): {memory_use}")
         grads = tape.gradient(loss_values, self.model.trainable_weights)
-        process = psutil.Process(os.getpid())
-        memory_use = process.memory_info().rss / (1024 * 1024)
-        # print(f"\tMemory usage_2 (grad): {memory_use}")
-        gc.collect()
-        memory_use = process.memory_info().rss / (1024 * 1024)
-        # print(f"\tMemory usage_2 (grad - after collect): {memory_use}")
-        self._optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
-        self.loss_tracker_t1.update_state(losses_tracker["t1"])
-        self.loss_tracker_t2.update_state(losses_tracker["t2"])
-        self.loss_tracker_t3.update_state(losses_tracker["t3"])
+        if apply_gradients:
+            self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
+
+        self.loss_tracker_t1.update_state(losses_tracker['t1'])
+        self.loss_tracker_t2.update_state(losses_tracker['t2'])
+        self.loss_tracker_t3.update_state(losses_tracker['t3'])
+
         self.loss_tracker.update_state(loss_values)
         if self.wandb:
             wandb.log(
                 {
-                    "lr": self._optimizer.learning_rate.numpy(),
-                    "epochs": epoch,
-                    "batch:": batch,
-                    "strike_loss": self.loss_tracker_t1.result(),
-                    "derivative_loss": self.loss_tracker_t2.result(),
-                    "steps_error_loss": self.loss_tracker_t3.result(),
-                    "overall_loss": self.loss_tracker.result(),
-                    # Overall derivatives
-                    "grads_magnitude": tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
-                    "analytical_grads": tf.reduce_mean(analytical_grads),
+                    'lr': self.optimizer.learning_rate.numpy(),
+                    'epochs': epoch,
+                    'batch:': batch,
+                    'strike_loss': self.loss_tracker_t1.result(),
+                    'derivative_loss': self.loss_tracker_t2.result(),
+                    'steps_error_loss': self.loss_tracker_t3.result(),
+                    'overall_loss': self.loss_tracker.result(),
+                    'grads_magnitude': tf.reduce_mean(self._get_dv_dxi(self.N - 1)),
+                    'analytical_grads': tf.reduce_mean(analytical_grads)
                 }
-            )
+            )  
         return (
-            self.loss_tracker.result(),
-            self.loss_tracker_t1.result(),
-            self.loss_tracker_t2.result(),
-            self.loss_tracker_t3.result(),
+            float(self.loss_tracker.result()), 
+            float(self.loss_tracker_t1.result()), 
+            float(self.loss_tracker_t2.result()), 
+            float(self.loss_tracker_t3.result())
         )
 
     def reset_trackers(self):
@@ -403,11 +383,36 @@ class LgmSingleStep(tf.keras.Model):
             self.custom_model, to_file=dot_img_file, show_shapes=True
         )
 
-    def _get_dv_dx(self, x: tf.Tensor):
+    def _get_dv_dx_tf(self, x: tf.Tensor):
         with tf.GradientTape() as tape:
             tape.watch(x)
             y = self.custom_model(x)
-        grads = tape.gradient(y, x)
+        grads = tape.gradient(y, {"xn": x})["xn"]
+        samples = tf.cast(tf.cast(tf.shape(x)[0], tf.float64) / self.N, tf.float64)
+        if grads is not None:
+            grads_reshaped = tf.reshape(grads[:, 0], (samples, self.N))
+            grads_prediction = grads[:, 0]
+            t_grads_reshaped = (
+                tf.reshape(grads[:, 1], (samples, self.N))
+                if grads.shape[1] > 1
+                else tf.zeros((samples, self.N))
+            )
+            t_grads_prediction = (
+                grads[:, 1] if grads.shape[1] > 1 else tf.zeros_like(x[:, 0])
+            )
+        else:
+            grads_reshaped = tf.zeros((samples, self.N))
+            grads_prediction = tf.zeros_like(x[:, 0])
+            t_grads_reshaped = tf.zeros((samples, self.N))
+            t_grads_prediction = tf.zeros_like(x[:, 0])
+        self.grads = grads_reshaped
+        return grads_reshaped, grads_prediction, t_grads_reshaped, t_grads_prediction
+    
+    def _get_dv_dx(self, x: tf.Tensor):
+        xn = tf.Variable(x, trainable = True, dtype = tf.float64)
+        with tf.GradientTape() as tape:
+            y = self.custom_model(xn)
+        grads = tape.gradient(y, {"xn": xn})["xn"]
         samples = tf.cast(tf.cast(tf.shape(x)[0], tf.float64) / self.N, tf.float64)
         if grads is not None:
             grads_reshaped = tf.reshape(grads[:, 0], (samples, self.N))
@@ -465,25 +470,3 @@ class LgmSingleStep(tf.keras.Model):
     # Save model
     def load_weights(self, path):
         self.custom_model.load_weights(path)
-
-    # Set device
-    def __set_device(self, device="cpu"):
-        if device.upper() == "CPU":
-            tf.config.set_visible_devices([], "GPU")
-            print("[DEVICE] Using CPU")
-        elif device.upper() == "GPU":
-            gpus = tf.config.list_physical_devices("GPU")
-            if gpus:
-                try:
-                    # Use the first GPU found
-                    # tf.config.set_visible_devices(gpus[0], "GPU")
-                    logical_gpus = tf.config.list_logical_devices("GPU")
-                    print(f"[DEVICE] Physical GPU, {len(logical_gpus)}, Logical GPU")
-                except RuntimeError as e:
-                    # Visible devices must be set before GPUs have been initialized
-                    print(e)
-            else:
-                print("[DEVICE] No GPU found, using CPU instead.")
-                tf.config.set_visible_devices([], "GPU")
-        else:
-            raise ValueError("[DEVICE] Unrecognized device. Use 'CPU' or 'GPU'.")
