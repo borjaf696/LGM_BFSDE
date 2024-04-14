@@ -19,6 +19,8 @@ def setup_model_zerobond():
         "n_steps": n_steps,
         "batch_size": batch_size
     }
+    X = tf.random.normal([n_steps * batch_size * T, 2], dtype = tf.float64)
+    delta_x = tf.random.normal([n_steps * batch_size * T, 1], dtype = tf.float64)
     model = LgmSingleStepNaive(
         n_steps=n_steps * T,
         T=T,
@@ -30,11 +32,10 @@ def setup_model_zerobond():
         phi=ZeroBond.Z_strike_normalized,
         name="zerobond",
         report_to_wandb=False,
-        normalize=False,
-        data_sample=None
+        normalize=True,
+        data_sample=X
     )
-    X = tf.random.normal([n_steps * batch_size * T, 2], dtype = tf.float64)
-    delta_x = tf.random.normal([n_steps * batch_size * T, 1], dtype = tf.float64)
+    
     return model, X, delta_x, setup_struct
 
 def test_predict_tf(setup_model_zerobond):

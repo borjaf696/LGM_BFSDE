@@ -104,8 +104,37 @@ class LGM_model_one_step(tf.keras.Model):
         self.__create_masks()
         # Verbose
         self._verbose = verbose
-
+        
     def __create_masks(self):
+        idx_preds = np.array(range(0, self._expected_sample_size, self.N))
+        mask_v = np.ones((self._expected_sample_size, 1))
+        mask_v[idx_preds] = 0
+        self._mask_v = tf.convert_to_tensor(
+            (mask_v == 1), 
+            dtype = tf.float64
+        )
+        self._mask_preds = tf.convert_to_tensor(
+            (mask_v == 0),
+            dtype = tf.float64
+        )
+        print(f'Positions to avoid from V {self._expected_sample_size - np.sum(self._mask_v)}')
+        print(f'Positions to complete from V {np.sum(self._mask_preds)}')
+
+        print(f'Loss mask: {self._expected_sample_size / self.N}')
+        idx_preds = np.array(range(self.N - 1, self._expected_sample_size + 1, self.N))
+        mask_loss = np.zeros((self._expected_sample_size, 1)) 
+        mask_loss[idx_preds] = 1.0
+        self._mask_loss = tf.reshape(
+            tf.convert_to_tensor(
+                (mask_loss == 1),
+                dtype = tf.float64
+            ),
+            (self._expected_sample_size, 1)
+        )
+        print(f'Positions to avoid from loss {self._expected_sample_size - np.sum(self._mask_loss)}')
+        print(f'Positions to complete from loss {np.sum(self._mask_loss)}')
+
+    def __create_masks_tf(self):
         # Create masks
         idx_preds = np.array(range(0, self._expected_sample_size, self.N))
         mask_v = np.ones((self._expected_sample_size, 1))

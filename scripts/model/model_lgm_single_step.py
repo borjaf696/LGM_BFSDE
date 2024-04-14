@@ -96,10 +96,18 @@ class LgmSingleStep(tf.keras.Model):
             start_normalization_time = time.time()
             self.mean = tf.reduce_mean(data_sample, axis=0)
             self.var = tf.math.reduce_variance(data_sample, axis=0)
-            self.epsilon = tf.constant(1e-5, dtype = tf.float64)
+            self.epsilon = tf.constant(1e-7, dtype = tf.float64)
+            """normalizer = Normalization(axis=-1)
+            normalizer.adapt(
+                data_sample
+            )
+            x = normalizer(
+                input_tmp
+            )"""
             print(f"[Normalization] Mean: {self.mean}")
             print(f"[Normalization] Var: {self.var}")
             print(f"[Normalization] Epsilon: {self.epsilon}")
+            
             end_normalization_time = time.time()
             print(
                 f"[Normalization] Normalization time: {end_normalization_time - start_normalization_time}s"
@@ -161,6 +169,38 @@ class LgmSingleStep(tf.keras.Model):
         self.verbose = verbose
         # Track with wandb
         self.wandb = report_to_wandb
+        
+    def __create_masks_ori(self):
+        sample_expected = np.int64(self.expected_sample_size)
+        N = np.int64(self.N)
+        idx_preds = np.array(range(0, sample_expected, N))
+        mask_v = np.ones((sample_expected, 1))
+        mask_v[idx_preds] = 0
+        self._mask_v = tf.convert_to_tensor(
+            (mask_v == 1), 
+            dtype = tf.float64
+        )
+        self._mask_preds = tf.convert_to_tensor(
+            (mask_v == 0),
+            dtype = tf.float64
+        )
+        print(f'Positions to avoid from V {self.expected_sample_size - np.sum(self._mask_v)}')
+        print(f'Positions to complete from V {np.sum(self._mask_preds)}')
+
+        # Loss mask
+        print(f'Loss mask: {self.expected_sample_size / self.N}')
+        idx_preds = np.array(range(N - 1, sample_expected + 1, N))
+        mask_loss = np.zeros((sample_expected, 1)) 
+        mask_loss[idx_preds] = 1.0
+        self._mask_loss = tf.reshape(
+            tf.convert_to_tensor(
+                (mask_loss == 1),
+                dtype = tf.float64
+            ),
+            (sample_expected, 1)
+        )
+        print(f'Positions to avoid from loss {self.expected_sample_size - np.sum(self._mask_loss)}')
+        print(f'Positions to complete from loss {np.sum(self._mask_loss)}')
 
     def __create_masks(self):
         idx_preds = tf.reshape(
@@ -304,7 +344,7 @@ class LgmSingleStep(tf.keras.Model):
     def custom_train_step(self, x, batch = 1, epoch = 1, delta_x = None, apply_gradients = True):
         first_dim, _ = x.shape
         batch_size = np.int64(first_dim / self.N)
-        x = tf.constant(x)
+        #x = tf.constant(x)
         with tf.GradientTape() as tape:
             v, predictions, _ = self.predict(x, delta_x = delta_x)
             v = tf.reshape(v, (batch_size, self.N))
@@ -388,25 +428,20 @@ class LgmSingleStep(tf.keras.Model):
     def _get_dv_dx_tf(self, x: tf.Tensor):
         with tf.GradientTape() as tape:
             tape.watch(x)
-            y = self.custom_model(x)
+            if self.normalize:
+                y = self.custom_model((x - self.mean) / (tf.sqrt(self.var + self.epsilon)))
+            else:
+                y = self.custom_model(x)
         grads = tape.gradient(y, {"xn": x})["xn"]
         samples = tf.cast(tf.cast(tf.shape(x)[0], tf.float64) / self.N, tf.float64)
         if grads is not None:
             grads_reshaped = tf.reshape(grads[:, 0], (samples, self.N))
             grads_prediction = grads[:, 0]
-            t_grads_reshaped = (
-                tf.reshape(grads[:, 1], (samples, self.N))
-                if grads.shape[1] > 1
-                else tf.zeros((samples, self.N))
-            )
-            t_grads_prediction = (
-                grads[:, 1] if grads.shape[1] > 1 else tf.zeros_like(x[:, 0])
-            )
         else:
             grads_reshaped = tf.zeros((samples, self.N))
             grads_prediction = tf.zeros_like(x[:, 0])
-            t_grads_reshaped = tf.zeros((samples, self.N))
-            t_grads_prediction = tf.zeros_like(x[:, 0])
+        t_grads_reshaped = tf.zeros((samples, self.N))
+        t_grads_prediction = tf.zeros_like(x[:, 0])
         self.grads = grads_reshaped
         return grads_reshaped, grads_prediction, t_grads_reshaped, t_grads_prediction
     
@@ -417,7 +452,11 @@ class LgmSingleStep(tf.keras.Model):
         x_variable = tf.Variable(features, name = 'x')                
         with tf.GradientTape() as tape:
             tape.watch(x_variable)
-            y = self.custom_model(x_variable)
+            if self.normalize:
+                x_variable_norm = (x_variable - self.mean) / tf.sqrt(self.var + self.epsilon)
+            y = self.custom_model(
+                x_variable_norm if self.normalize else x_variable
+            )
         grads = tape.gradient(
             y, 
             {
