@@ -67,8 +67,6 @@ def trainer(
     simulate_in_epoch: bool = False,
     device: str = "cpu"
 ):
-    # Start tracer
-    tracemalloc.start()
     if report_to_wandb:
         wandb.init(
             project="lgm",
@@ -204,7 +202,6 @@ def trainer(
             dataset = tf.data.Dataset.from_tensor_slices((x, delta_x))
             dataset = dataset.batch(size_of_the_batch)
         print(f"{epoch}...", end="")
-        snapshot1 = tracemalloc.take_snapshot()
         for batch, (x_batch, delta_x_batch) in enumerate(dataset):
             Utils.print_progress_bar(
                 batch, batches, prefix="batches", suffix="|", length=50, fill="█"
@@ -212,24 +209,13 @@ def trainer(
             local_batch_size = x_batch.shape[0]
             x_batch = tf.reshape(x_batch, (N_steps * local_batch_size, 2))
             delta_x_batch = tf.reshape(delta_x_batch, (N_steps * local_batch_size, 1))
-
-            process = psutil.Process(os.getpid())
-            memory_use = process.memory_info().rss / (1024 * 1024)
-            # print(f"\n\tMemory usage_1 (trainer): {memory_use}")
+            
             x = tf.cast(x_batch, dtype=tf.float64)
             delta_x = tf.cast(delta_x_batch, dtype=tf.float64)
             loss, _, _, _ = lgm_single_step.fit_step(
                 x=x,
                 delta_x=delta_x,
             )
-            process = psutil.Process(os.getpid())
-            memory_use = process.memory_info().rss / (1024 * 1024)
-            # print(f"\tMemory usage_2 (trainer): {memory_use}")
-        snapshot2 = tracemalloc.take_snapshot()
-        top_stats = snapshot2.compare_to(snapshot1, "lineno")
-        print("[ Top 10 diferencias ]")
-        for stat in top_stats[:10]:
-            print(stat)
         if epoch % 1 == 0:
             lgm_single_step.plot_tracker_results(epoch)
         epoch += 1

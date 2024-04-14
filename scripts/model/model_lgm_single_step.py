@@ -408,30 +408,25 @@ class LgmSingleStep(tf.keras.Model):
         self.grads = grads_reshaped
         return grads_reshaped, grads_prediction, t_grads_reshaped, t_grads_prediction
     
-    def _get_dv_dx(self, x: tf.Tensor):
-        xn = tf.Variable(x, trainable = True, dtype = tf.float64)
+    def _get_dv_dx(self, features):
+        samples, _ = features.shape
+        batch_size = int(np.floor(samples / self.N))
+        grads = []
+        x_variable = tf.Variable(features, name = 'x')                
         with tf.GradientTape() as tape:
-            y = self.custom_model(xn)
-        grads = tape.gradient(y, {"xn": xn})["xn"]
-        samples = tf.cast(tf.cast(tf.shape(x)[0], tf.float64) / self.N, tf.float64)
-        if grads is not None:
-            grads_reshaped = tf.reshape(grads[:, 0], (samples, self.N))
-            grads_prediction = grads[:, 0]
-            t_grads_reshaped = (
-                tf.reshape(grads[:, 1], (samples, self.N))
-                if grads.shape[1] > 1
-                else tf.zeros((samples, self.N))
-            )
-            t_grads_prediction = (
-                grads[:, 1] if grads.shape[1] > 1 else tf.zeros_like(x[:, 0])
-            )
-        else:
-            grads_reshaped = tf.zeros((samples, self.N))
-            grads_prediction = tf.zeros_like(x[:, 0])
-            t_grads_reshaped = tf.zeros((samples, self.N))
-            t_grads_prediction = tf.zeros_like(x[:, 0])
-        self.grads = grads_reshaped
-        return grads_reshaped, grads_prediction, t_grads_reshaped, t_grads_prediction
+            tape.watch(x_variable)
+            y = self.custom_model(x_variable)
+        grads = tape.gradient(
+            y, 
+            {
+                'x': x_variable
+            }
+        )
+        self.grads = tf.reshape(grads['x'][:, 0], (batch_size, self.N))
+        self.grads_prediction = grads['x'][:, 0]
+        self.t_grads = tf.reshape(grads['x'][:, 1], (batch_size, self.N))
+        self.t_grads_prediction = grads['x'][:, 1]
+        return self.grads, self.grads_prediction, self.t_grads, self.t_grads_prediction
 
     def _get_dv_dxi(self, i):
         return self.grads[:, i] if self.grads is not None else None
