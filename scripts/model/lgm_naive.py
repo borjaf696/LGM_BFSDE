@@ -8,7 +8,7 @@ class LgmSingleStepNaive(LgmSingleStep):
 
     def predict_tf(self, X: tf.Tensor, delta_x: tf.Tensor, build_masks: bool = False):
         if self.normalize:
-            X = (X - self.mean) / self.std
+            X = (X - self.mean) / tf.sqrt(self.var + self.epsilon)
         predictions = self.custom_model(X)
         predictions = tf.cast(predictions, dtype=tf.float64)
         predictions_rolled = tf.roll(predictions, shift=1, axis=0)
@@ -48,7 +48,7 @@ class LgmSingleStepNaive(LgmSingleStep):
         debug: bool = False
     ):
         if self.normalize:
-            X = (X - self.mean) / self.std
+            X = (X - self.mean) / tf.sqrt(self.var + self.epsilon)
         predictions = self.custom_model(X)
         if debug:
             print(f'Predictions shape: {predictions.shape}')

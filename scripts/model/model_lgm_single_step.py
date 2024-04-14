@@ -95,9 +95,11 @@ class LgmSingleStep(tf.keras.Model):
             # Normalizer
             start_normalization_time = time.time()
             self.mean = tf.reduce_mean(data_sample, axis=0)
-            self.std = tf.math.reduce_std(data_sample, axis=0)
+            self.var = tf.math.reduce_variance(data_sample, axis=0)
+            self.epsilon = tf.constant(1e-5, dtype = tf.float64)
             print(f"[Normalization] Mean: {self.mean}")
-            print(f"[Normalization] Std: {self.std}")
+            print(f"[Normalization] Var: {self.var}")
+            print(f"[Normalization] Epsilon: {self.epsilon}")
             end_normalization_time = time.time()
             print(
                 f"[Normalization] Normalization time: {end_normalization_time - start_normalization_time}s"

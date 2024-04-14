@@ -25,8 +25,6 @@ class Preprocessor:
         df_x.loc[df_x._delta_x.isna(), "_delta_x"] = 0.0
         # Sort to get the examples in blocks
         df_x.sort_values(["simulation", "dt"], inplace=True)
-        # Remove unused dfs
-        del df_tmp
 
         return df_x
 
