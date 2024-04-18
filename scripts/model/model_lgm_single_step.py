@@ -398,7 +398,7 @@ class LgmSingleStep(tf.keras.Model):
         self.loss_tracker.reset_state()
 
     def plot_tracker_results(self, epoch: int):
-        print(f"Epoch {epoch} Mean loss {self.loss_tracker.result()}")
+        print(f"Epoch {epoch} Mean loss {self.loss_tracker.result()} Learning rate: {self.optimizer.learning_rate.numpy()}")
         print(
             f"\tPartial losses:\n\t\tStrike loss:{self.loss_tracker_t1.result()}\n\t\tDerivative loss: {self.loss_tracker_t2.result()}\n\t\tSteps loss: {self.loss_tracker_t3.result()}"
         )

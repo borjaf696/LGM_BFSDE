@@ -81,6 +81,10 @@ def parse_args():
     parser.add_argument(
         "--nepochs", type=int, help="Number of epochs (default 100)", default=100
     )
+    parser.add_argument(
+        "--batch_size", type = int, help = "Size of the batch", default = 64
+        
+    )
     parser.add_argument("--save", type=bool, help="Save the model", default=False)
     parser.add_argument("--device", type=str, help="Device to be used", default="cpu")
     # Wandb Tracker
@@ -123,6 +127,8 @@ def get_phi_test(active):
 
 if __name__ == "__main__":
     args = parse_args()
+    # Size of the batch:
+    batch_size = args.batch_size
     # Wandb integration
     if args.wandb:
         wandb.login()
@@ -151,6 +157,7 @@ if __name__ == "__main__":
     print(f"\tSigma: {sigma}")
     print(f"\tDevice: {args.device}")
     print(f"\tLaunch test: {args.test}")
+    print(f"\tBatch size: {args.batch_size}")
     # tf model training
     phi_str = args.phi
     # Imprime los valores de los argumentos
@@ -186,14 +193,15 @@ if __name__ == "__main__":
         schema=args.schema,
         save_model=args.save,
         simulate_in_epoch=args.simulate_in_epoch,
-        device = args.device
+        device = args.device,
+        batch_size = args.batch_size
     )
     # Test
     if args.test:
         # TODO: Remove from here
-        test_name_file = f"data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}.csv"
+        test_name_file = f"data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_bs_{batch_size}.csv"
         # TODO: Remove from here
-        train_name_file = f"data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}.csv"
+        train_name_file = f"data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_bs_{batch_size}.csv"
         test_sims = min(int(nsims * 0.001), 10000)
         mcsimulator = MCSimulation(
             T=T, X0=X0, sigma=sigma, N=N_steps, dim=dim, period=None

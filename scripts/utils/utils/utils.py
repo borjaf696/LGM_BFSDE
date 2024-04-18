@@ -752,7 +752,8 @@ class Swaption:
             xn=xn, Ti=T, Tm=Tm, ct=ct, period=period, K=K
         )
         anuality_term = Swap.anuality_swap(xn, T, T, Tm, ct, period)
-        return positive_par_swap  # * anuality_term
+        
+        return positive_par_swap * anuality_term
 
 
 class TestExamples:

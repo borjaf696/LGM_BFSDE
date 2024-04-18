@@ -42,8 +42,6 @@ class Losses:
         partial_loss = tf.where(diff > 1, L2(t1, t2), L1(diff))
         return partial_loss
 
-    import tensorflow as tf
-
     @staticmethod
     def loss_lgm_tf(
         x: tf.Tensor,
