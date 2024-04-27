@@ -21,28 +21,17 @@ TIMES = {3: 0.25, 6: 0.5, 12: 1.0}
 class CyclicLR(tf.keras.optimizers.schedules.LearningRateSchedule):
     def __init__(self, base_lr, max_lr, step_size, decay=1.0, mode="triangular"):
         super().__init__()
-
         self.base_lr = base_lr
         self.max_lr = max_lr
         self.step_size = step_size
         self.decay = decay
         self.mode = mode
 
-        self.clr_iterations = 0.0
-
     def __call__(self, step):
-        cycle = np.floor(1 + self.clr_iterations / (2 * self.step_size))
-        x = np.abs(self.clr_iterations / self.step_size - 2 * cycle + 1)
-
-        if self.mode == "triangular":
-            lr = self.base_lr + (self.max_lr - self.base_lr) * np.maximum(0, (1 - x))
-        else:
-            raise NotImplementedError("mode '{}' is not implemented".format(self.mode))
-
-        self.clr_iterations += 1
-        # Apply decay
-        return lr * (self.decay ** (self.clr_iterations / self.step_size))
-
+        cycle = tf.floor(1. + tf.cast(step, tf.float32) / (2 * self.step_size))
+        x = tf.abs(tf.cast(step, tf.float32) / self.step_size - 2 * cycle + 1)
+        lr = self.base_lr + (self.max_lr - self.base_lr) * tf.maximum(0., (1 - x))
+        return lr * (self.decay ** (tf.floor(tf.cast(step, tf.float32) / self.step_size)))
 
 class TFUtils:
     @staticmethod
@@ -825,7 +814,7 @@ class VisualizationHelper:
 class GPUUtils:
     
     @staticmethod
-    def set_device(device = "cpu"):
+    def set_device(device = "cpu", gpu_number = 1):
         if device.upper() == "CPU":
             tf.config.set_visible_devices([], "GPU")
             print("[DEVICE] Using CPU")
@@ -834,10 +823,10 @@ class GPUUtils:
             if gpus:
                 try:
                     # Use the first GPU found
-                    tf.config.set_visible_devices(gpus[1], "GPU")
+                    tf.config.set_visible_devices(gpus[gpu_number], "GPU")
                     logical_gpus = tf.config.list_logical_devices("GPU")
                     print(f"[DEVICE] Physical GPU, {len(logical_gpus)}, Logical GPU")
-                    print(f"[DEVICE] Set device GPU: {gpus[1]}")
+                    print(f"[DEVICE] Set device GPU: {gpus[gpu_number]}")
                 except RuntimeError as e:
                     print(e)
             else:

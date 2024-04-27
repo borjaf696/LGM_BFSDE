@@ -126,7 +126,6 @@ class LgmSingleStep(tf.keras.Model):
         # Build dense layers
         self.dense_layers = []
         self.batch_norm_layers = []
-
         for i in range(self.num_layers):
             self.dense_layers.append(
                 tf.keras.layers.Dense(
@@ -165,6 +164,9 @@ class LgmSingleStep(tf.keras.Model):
         self.grads = None
         # Create masks
         self.__create_masks()
+        # Tracked best model
+        self.min_tracked_loss = 99999999
+        self.best_weights = None
         # Verbose
         self.verbose = verbose
         # Track with wandb
@@ -398,13 +400,32 @@ class LgmSingleStep(tf.keras.Model):
         self.loss_tracker.reset_state()
 
     def plot_tracker_results(self, epoch: int):
-        print(f"Epoch {epoch} Mean loss {self.loss_tracker.result()} Learning rate: {self.optimizer.learning_rate.numpy()}")
+        tracked_loss = self.get_tracked_loss()
+        print(f"Epoch {epoch} Mean loss {tracked_loss} Learning rate: {self.optimizer.learning_rate.numpy()}")
         print(
             f"\tPartial losses:\n\t\tStrike loss:{self.loss_tracker_t1.result()}\n\t\tDerivative loss: {self.loss_tracker_t2.result()}\n\t\tSteps loss: {self.loss_tracker_t3.result()}"
         )
         process = psutil.Process(os.getpid())
         memory_use = process.memory_info().rss / (1024 * 1024)
         print(f"\tMemory usage: {memory_use}")
+        stored_new_model = self.evaluate_current_weights(tracked_loss = tracked_loss)
+        print(f"\tStored new weights: {stored_new_model}")
+        
+    def evaluate_current_weights(self, tracked_loss: float):
+        if tracked_loss < self.min_tracked_loss:
+            self.min_tracked_loss = tracked_loss
+            self.best_weights = [np.copy(w.numpy()) for w in self.custom_model.weights]
+            return True
+        return False
+    
+    def set_best_weights(self):
+        self.custom_model.set_weights(self.best_weights)
+        
+    def get_best_loss(self):
+        return self.min_tracked_loss
+        
+    def get_tracked_loss(self):
+        return self.loss_tracker.result()        
 
     def get_losses_internal(self):
         """_summary_

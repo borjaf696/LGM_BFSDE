@@ -65,6 +65,7 @@ def trainer(
     simulate_in_epoch: bool = False,
     device: str = "cpu",
     batch_size: int = 64,
+    decay: float = 0.99,
 ):
     if report_to_wandb:
         wandb.init(
@@ -157,9 +158,9 @@ def trainer(
     )
     # Model name
     if TM is not None:
-        model_name = f"models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.weights.h5"
+        model_name = f"models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize_{normalize}_step_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}_decay_{decay}.weights.h5"
     else:
-        model_name = f"models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize{normalize}_step_{T}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}.weights.h5"
+        model_name = f"models_store/{phi_str}_{schema}_model_lgm_single_sigma_{sigma}_dim_{dim}_normalize{normalize}_step_{T}_{nsims}_{N_steps}_epochs_{epochs}_batchsize_{size_of_the_batch}_decay_{decay}.weights.h5"
     # lgm_single_step.export_model_architecture()
     try:
         lgm_single_step.load_weights(model_name)
@@ -173,7 +174,7 @@ def trainer(
     # Starting learning rate
     if anneal_lr:
         lr = CyclicLR(
-            base_lr=1e-3, max_lr=0.006, step_size=100, decay=0.99, mode="triangular"
+            base_lr=1e-3, max_lr=0.006, step_size=100, decay=decay, mode="triangular"
         )
     else:
         lr = 3e-5
@@ -222,6 +223,9 @@ def trainer(
         lgm_single_step.reset_trackers()
         # Clear tf backend
         lgm_single_step.clear_memory()
+    # Change the model weights to the weights with best performance
+    lgm_single_step.set_best_weights()
+    loss = lgm_single_step.get_best_loss()
     # Explanation cut training
     print(f"Finishing training with {epoch} epochs and loss {loss:.4f}")
     # Save the model

@@ -37,7 +37,7 @@ class ArgumentFailure(Exception):
 
 # TODO: Reformat
 def parse_args():
-    parser = argparse.ArgumentParser(description="Descripción del programa")
+    parser = argparse.ArgumentParser(description="Program description")
 
     parser.add_argument(
         "--phi",
@@ -83,10 +83,13 @@ def parse_args():
     )
     parser.add_argument(
         "--batch_size", type = int, help = "Size of the batch", default = 64
-        
+    )
+    parser.add_argument(
+        "--decay", type = float, help = "LR decay", default = 0.99
     )
     parser.add_argument("--save", type=bool, help="Save the model", default=False)
     parser.add_argument("--device", type=str, help="Device to be used", default="cpu")
+    parser.add_argument("--device_num", type=int, help="Number of GPU under use", default=1)
     # Wandb Tracker
     parser.add_argument("--wandb", type=bool, help="Wandb", default=False)
     # Test
@@ -129,6 +132,7 @@ if __name__ == "__main__":
     args = parse_args()
     # Size of the batch:
     batch_size = args.batch_size
+    decay = args.decay
     # Wandb integration
     if args.wandb:
         wandb.login()
@@ -156,8 +160,10 @@ if __name__ == "__main__":
     print(f"\tX0: {X0}")
     print(f"\tSigma: {sigma}")
     print(f"\tDevice: {args.device}")
+    print(f"\tNumber of device: {args.device_num}")
     print(f"\tLaunch test: {args.test}")
     print(f"\tBatch size: {args.batch_size}")
+    print(f"\tDecay: {decay}")
     # tf model training
     phi_str = args.phi
     # Imprime los valores de los argumentos
@@ -174,7 +180,7 @@ if __name__ == "__main__":
     # Schema selected:
     print(f"Schema: {args.schema}")
     # Set the device
-    GPUUtils.set_device(args.device)
+    GPUUtils.set_device(args.device, gpu_number = args.device_num)
     # Epochs
     epochs = args.nepochs
     # Train the model
@@ -194,14 +200,15 @@ if __name__ == "__main__":
         save_model=args.save,
         simulate_in_epoch=args.simulate_in_epoch,
         device = args.device,
-        batch_size = args.batch_size
+        batch_size = batch_size,
+        decay = decay
     )
     # Test
     if args.test:
         # TODO: Remove from here
-        test_name_file = f"data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_bs_{batch_size}.csv"
+        test_name_file = f"data/export/test/{phi_str}_{args.schema}_normalize_{normalize}_test_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_bs_{batch_size}_decay_{decay}.csv"
         # TODO: Remove from here
-        train_name_file = f"data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_bs_{batch_size}.csv"
+        train_name_file = f"data/export/train/{phi_str}_{args.schema}_normalize_{normalize}_train_results_sigma_{sigma}_dim_{dim}_{T}_{TM}_{nsims}_{N_steps}_epochs_{epochs}_bs_{batch_size}_decay_{decay}.csv"
         test_sims = min(int(nsims * 0.001), 10000)
         mcsimulator = MCSimulation(
             T=T, X0=X0, sigma=sigma, N=N_steps, dim=dim, period=None
