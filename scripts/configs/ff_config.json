@@ -1,4 +1,38 @@
 {
+    "test":{
+        "1":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "2":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "3":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "4":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "5":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "6":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "7":{
+            "layers": 6,
+            "hidden_units": 16
+        },
+        "8":{
+            "layers": 6,
+            "hidden_units": 16
+        }
+    },
     "zerobond":{
         "1":{
             "layers": 6,

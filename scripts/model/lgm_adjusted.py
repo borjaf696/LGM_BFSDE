@@ -12,12 +12,14 @@ class LgmSingleStepModelAdjusted(LgmSingleStep):
     Args:
         LgmSingleStep (_type_): _description_
     """
-        
-    def predict(self, 
-                X:tf.Tensor, 
-                delta_x:tf.Tensor,
-                build_masks: bool = False,
-                debug: bool = False):
+
+    def predict(
+        self,
+        X: tf.Tensor,
+        delta_x: tf.Tensor,
+        build_masks: bool = False,
+        debug: bool = False,
+    ):
         """_summary_
 
         Args:
@@ -28,12 +30,9 @@ class LgmSingleStepModelAdjusted(LgmSingleStep):
         """
         predictions = self._custom_model(X)
         if debug:
-            print(f'Predictions shape: {predictions.shape}')
-            print(f'Predictions: {predictions}')
-        predictions = tf.cast(
-            predictions, 
-            dtype=tf.float64
-        )
+            print(f"Predictions shape: {predictions.shape}")
+            print(f"Predictions: {predictions}")
+        predictions = tf.cast(predictions, dtype=tf.float64)
         # Get the gradients
         _, grads_x, _, _ = self._get_dv_dx(X)
         # Reshapes
@@ -44,14 +43,5 @@ class LgmSingleStepModelAdjusted(LgmSingleStep):
         v[:, 0] = predictions_reshaped[:, 0]
         for i in range(1, self.N):
             v[:, i] = v[:, i - 1] + grads_x_reshaped[:, i - 1] * delta_x_reshaped[:, i]
-        v = tf.convert_to_tensor(
-            np.reshape(
-                v, 
-                (
-                    self._batch_size * self.N, 
-                    1
-                )
-            )   
-        )
+        v = tf.convert_to_tensor(np.reshape(v, (self._batch_size * self.N, 1)))
         return v, predictions
-    
