@@ -97,6 +97,7 @@ def trainer(
     batches = int(np.floor(nsims * N_steps / batch_size))
     # LGM model instance
     future_T = TM if TM is not None else T
+    
     # Initial simulation to adapt normalization
     df_x, features = simulate(
         T=T,
@@ -106,7 +107,7 @@ def trainer(
         nsims=min(10 * nsims, 100000) if simulate_in_epoch else nsims,
     )
     x0 = df_x[features].values.astype(np.float64)
-
+    
     if schema == 1:
         lgm_single_step = LgmSingleStepNaive(
             n_steps=N_steps,
@@ -153,6 +154,48 @@ def trainer(
             normalize=normalize,
             data_sample=x0,
         )
+    # Enhance simulation
+    df_x = None
+    while (df_x is None) or (df_x.sim.nunique() < nsims):
+        df_x_, features = simulate(
+            T=T,
+            N_steps=N_steps,
+            dim=dim,
+            sigma=sigma,
+            nsims=min(10 * nsims, 100000) if simulate_in_epoch else nsims,
+        )
+        offset = 0
+        if df_x is not None:
+            offset = df_x.sim.max() + 1
+        df_x_["sim"] += offset
+        cond = (
+            df_x_.dt == T
+        )
+        df_tmp = df_x_.loc[cond]
+        results = phi(
+            xn = tf.constant(df_tmp.X_0.values, dtype = tf.float64),
+            T = tf.constant(T, dtype = tf.float64),
+            Tm = tf.constant(future_T, dtype = tf.float64),
+            ct = tf.constant(lgm_single_step.ct, dtype = tf.float64)
+        )
+        cond_loc = (results != 0).numpy()
+        valid_sims = df_tmp.loc[
+            cond_loc,
+            "sim"
+        ]
+        df_x_ = df_x_.loc[
+            df_x_.sim.isin(valid_sims)
+        ]
+        df_x = (
+            pd.concat([df_x, df_x_]) 
+            if df_x is not None
+            else
+            df_x_
+        )
+        print(f"\nNew number of simulations: {df_x.sim.nunique()} - Expected: {nsims}")
+    final_paths = (df_x.sim.unique())[:nsims]
+    df_x = df_x.loc[df_x.sim.isin(final_paths)]
+    print(f"Final number of simulations: {df_x.sim.nunique()}")
     print(
         f"[MEMORY] Main dataframe memory usage: {df_x.memory_usage(deep = True).sum() / 2**30} Gb"
     )
