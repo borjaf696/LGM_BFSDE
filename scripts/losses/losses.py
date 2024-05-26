@@ -67,7 +67,17 @@ class Losses:
         strike_loss = Losses.get_loss(
             t1=real_values, t2=predictions[:, -1], L1=L1, L2=L2
         )
-        strike_loss = tf.reduce_sum(strike_loss) / tf.cast(batch_size, dtype=tf.float64)
+        not_valid_idx = tf.cast(
+            (real_values == 0),
+            dtype = tf.float64
+        )
+        batch_size_den_factor = (
+            tf.cast(
+                batch_size - tf.reduce_sum(not_valid_idx) + tf.constant(1e-5, dtype = tf.float64), 
+                dtype = tf.float64
+            )
+        )
+        strike_loss = tf.reduce_sum(strike_loss) / batch_size_den_factor
         
         xn = x_reformat[:, -1]
         with tf.GradientTape(persistent = False) as tape:
@@ -77,8 +87,9 @@ class Losses:
         df_dxn = grad_df if grad_df is not None else 0.0 * xn
 
         derivative_loss = Losses.get_loss(t1=derivatives, t2=df_dxn, L1=L1, L2=L2)
-        derivative_loss = tf.reduce_sum(derivative_loss) / tf.cast(
-            batch_size, dtype=tf.float64
+        derivative_loss = (
+            tf.reduce_sum(derivative_loss) /  
+            batch_size_den_factor
         )
 
         og_shape = tf.shape(v)
@@ -91,7 +102,7 @@ class Losses:
         error_per_step = (
             tf.reduce_sum(error_per_step[:, -2])
             / tf.cast(N_steps, dtype=tf.float64)
-            / tf.cast(batch_size, dtype=tf.float64)
+            /  batch_size_den_factor
         )
 
         strike_loss *= betas[0]
@@ -122,7 +133,7 @@ class Losses:
     ):
         L1 = tf.math.abs
         L2 = tf.math.squared_difference
-        betas = [1.0, 1.0, 1.0]
+        betas = [1.0, 1.0, 1e2]
         samples, _ = x.shape
         batch_size = int(np.floor(samples / N_steps))
         x_reformat = tf.reshape(x[:, 0], (batch_size, N_steps))
@@ -141,7 +152,8 @@ class Losses:
             L1 = L1,
             L2 = L2
         )
-        strike_loss = tf.reduce_sum(strike_loss) / batch_size
+        valid_idx = (strike_loss == 0)
+        strike_loss = tf.reduce_sum(strike_loss[valid_idx]) / (batch_size - valid_idx.sum() + 1e-5)
         xn = tf.Variable(xn_tensor, name = 'xn', trainable = True)
         T = tf.Variable(np.float64(T), name = 'tn', trainable=False)
         TM = tf.Variable(np.float64(TM), name = 'ct', trainable=False)
@@ -166,7 +178,7 @@ class Losses:
             L1 = L1,
             L2 = L2
         )
-        derivative_loss = tf.reduce_sum(derivative_loss) / batch_size
+        derivative_loss = tf.reduce_sum(derivative_loss[valid_idx]) / (batch_size - valid_idx.sum() + 1e-5)
         og_shape = v.shape
         v = tf.reshape(v, [-1])
         predictions = tf.reshape(predictions, [-1])
@@ -175,14 +187,14 @@ class Losses:
             t2 = predictions,
             L1 = L1,
             L2 = L2
-        )
+        )[valid_idx, :]
         step_loss = tf.reshape(step_loss, og_shape)
         error_per_step = tf.cumsum(
             step_loss[:, 1:],
             axis = 1
         )
         error_per_step = tf.reduce_sum(
-            error_per_step[:, -2] / N_steps / batch_size
+            error_per_step[:, -2] / N_steps / (batch_size - valid_idx.sum() + 1e-5)
         )
         strike_loss *= betas[0]
         derivative_loss *= betas[1]
