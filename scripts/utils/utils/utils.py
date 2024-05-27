@@ -575,8 +575,8 @@ class Swaption:
             else:
                 swaption_results.append(swaption_at_strike(xni, cti))
         N = ZeroBond.N_tensor(t, xn, ct)
-        anuality_term = Swap.anuality_swap(xn, t, Ti, Tm, ct, period)
-        return swaption_results * N * anuality_term
+        # anuality_term = Swap.anuality_swap(xn, t, Ti, Tm, ct, period)
+        return swaption_results * N # * anuality_term
 
     def Swaption_test_tf(xn, t, Ti, Tm, ct, period=6, K=0.03, cT=None):
         cT = tf.reduce_max(ct) if cT is None else cT
@@ -740,9 +740,8 @@ class Swaption:
         positive_par_swap = Swap.positive_parswap_tf(
             xn=xn, Ti=T, Tm=Tm, ct=ct, period=period, K=K
         )
-        anuality_term = Swap.anuality_swap(xn, T, T, Tm, ct, period)
-        
-        return positive_par_swap * anuality_term
+        # anuality_term = Swap.anuality_swap(xn, T, T, Tm, ct, period)
+        return positive_par_swap # * anuality_term
 
 
 class TestExamples:
@@ -802,6 +801,35 @@ class VisualizationHelper:
         plt.figure(figsize=(10, 4))
         for y in values_column:
             sns.lineplot(data=df, x=x, y=y, label=y)
+        plt.title(title)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.legend()
+
+        # Mostrar el gráfico
+        plt.show()
+    
+    @staticmethod
+    def plot_serie(
+        df, x, y, title="Results", xlabel="Xt", ylabel="Y", hue = None
+    ):
+        """
+        Grafica una serie de tiempo usando seaborn y matplotlib.
+
+        :param df: DataFrame de Pandas que contiene la serie de tiempo.
+        :param date_column: Nombre de la columna en df que contiene las fechas.
+        :param value_column: Nombre de la columna en df que contiene los valores.
+        :param title: Título del gráfico.
+        :param xlabel: Etiqueta del eje X.
+        :param ylabel: Etiqueta del eje Y.
+        """
+        sns.set(style="darkgrid")
+
+        plt.figure(figsize=(10, 4))
+        if hue is None:
+            sns.lineplot(data=df, x=x, y=y, label=y)
+        else:
+            sns.lineplot(data=df, x=x, y=y, hue = hue)
         plt.title(title)
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
