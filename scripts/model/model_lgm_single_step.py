@@ -148,14 +148,27 @@ class LgmSingleStep(tf.keras.Model):
         self.custom_model = keras.Model(
             inputs=input_tmp, outputs=output_tmp, name=name
         )
+        # Beta parameters
+        self.beta1 = tf.Variable(1.0, trainable=False, dtype=tf.float64, name='beta1')
+        self.beta2 = tf.Variable(1.0, trainable=False, dtype=tf.float64, name='beta2')
+        self.beta3 = tf.Variable(1.0, trainable=False, dtype=tf.float64, name='beta3')
+        self.beta4 = tf.Variable(1.0, trainable=False, dtype=tf.float64, name='beta4')
         # Set the loss function
         self.loss_lgm = Losses.loss_lgm_tf
-        # Metrics tracker
+        # Train Metrics tracker
         self.loss_tracker = tf.keras.metrics.Mean(name="total_loss")
-        # Internal management
+        # Train Internal management
         self.loss_tracker_t1 = tf.keras.metrics.Mean(name="strike_loss")
         self.loss_tracker_t2 = tf.keras.metrics.Mean(name="derivative_loss")
         self.loss_tracker_t3 = tf.keras.metrics.Mean(name="step_loss")
+        self.loss_tracker_t4 = tf.keras.metrics.Mean(name="trivial_penalization")
+        # Val Metrics tracker
+        self.loss_tracker_val = tf.keras.metrics.Mean(name="total_loss")
+        # Val Internal management
+        self.loss_tracker_t1_val = tf.keras.metrics.Mean(name="strike_loss")
+        self.loss_tracker_t2_val = tf.keras.metrics.Mean(name="derivative_loss")
+        self.loss_tracker_t3_val = tf.keras.metrics.Mean(name="step_loss")
+        self.loss_tracker_t4_val = tf.keras.metrics.Mean(name="trivial_penalization")
         # Duration each step
         self.deltaT = T / self.N
         # CT
@@ -295,9 +308,9 @@ class LgmSingleStep(tf.keras.Model):
     def learning_rate(self, learning_rate):
         self.optimizer.learning_rate.assign(learning_rate)
         
-    def fit_step(self, x: tf.Tensor, delta_x: tf.Tensor):
+    def fit_step(self, x: tf.Tensor, delta_x: tf.Tensor, apply_gradients: bool = True):
         return (
-            self.custom_train_step_tf(x = x, delta_x = delta_x) 
+            self.custom_train_step_tf(x = x, delta_x = delta_x, apply_gradients = apply_gradients) 
             if self.device == "gpu" else 
             self.custom_train_step(x = x, delta_x = delta_x)
         )
@@ -328,20 +341,36 @@ class LgmSingleStep(tf.keras.Model):
                 TM=self.future_T,
                 batch_size=self.batch_size,
                 phi=self.phi,
+                betas = [self.beta1, self.beta2, self.beta3]
             )
-        grads = tape.gradient(loss_values, self.model.trainable_weights)
         if apply_gradients:
-            self.optimizer.apply_gradients(zip(grads, self.model.trainable_weights))
-        self.loss_tracker_t1.update_state(losses_tracker["t1"])
-        self.loss_tracker_t2.update_state(losses_tracker["t2"])
-        self.loss_tracker_t3.update_state(losses_tracker["t3"])
-        self.loss_tracker.update_state(loss_values)
+            trainable_vars = self.model.trainable_weights # + [self.beta1, self.beta2, self.beta3]
+            grads = tape.gradient(loss_values, trainable_vars)
+            self.optimizer.apply_gradients(zip(grads, trainable_vars))
+            self.loss_tracker.update_state(loss_values)
+            self.loss_tracker_t1.update_state(losses_tracker["t1"])
+            self.loss_tracker_t2.update_state(losses_tracker["t2"])
+            self.loss_tracker_t3.update_state(losses_tracker["t3"])
+            self.loss_tracker_t4.update_state(losses_tracker["t4"])
+            return (
+                self.loss_tracker.result(),
+                self.loss_tracker_t1.result(),
+                self.loss_tracker_t2.result(),
+                self.loss_tracker_t3.result(),
+                self.loss_tracker_t4.result()
+            )
+        self.loss_tracker_val.update_state(loss_values)
+        self.loss_tracker_t1_val.update_state(losses_tracker["t1"])
+        self.loss_tracker_t2_val.update_state(losses_tracker["t2"])
+        self.loss_tracker_t3_val.update_state(losses_tracker["t3"])
+        self.loss_tracker_t4_val.update_state(losses_tracker["t4"])
         return (
-            self.loss_tracker.result(),
-            self.loss_tracker_t1.result(),
-            self.loss_tracker_t2.result(),
-            self.loss_tracker_t3.result(),
-        )
+                self.loss_tracker_val.result(),
+                self.loss_tracker_t1_val.result(),
+                self.loss_tracker_t2_val.result(),
+                self.loss_tracker_t3_val.result(),
+                self.loss_tracker_t4_val.result()
+            )
 
     def custom_train_step(self, x, batch = 1, epoch = 1, delta_x = None, apply_gradients = True):
         first_dim, _ = x.shape
@@ -399,17 +428,35 @@ class LgmSingleStep(tf.keras.Model):
         self.loss_tracker_t3.reset_state()
         self.loss_tracker.reset_state()
 
-    def plot_tracker_results(self, epoch: int):
-        tracked_loss = self.get_tracked_loss()
+    def plot_tracker_results(self, epoch: int = 1, flag: str = "train"):
+        tracked_loss = self.get_tracked_loss(flag = flag)
         print(f"Epoch {epoch} Mean loss {tracked_loss} Learning rate: {self.optimizer.learning_rate.numpy()}")
-        print(
-            f"\tPartial losses:\n\t\tStrike loss:{self.loss_tracker_t1.result()}\n\t\tDerivative loss: {self.loss_tracker_t2.result()}\n\t\tSteps loss: {self.loss_tracker_t3.result()}"
-        )
+        if flag == "train":
+            print(
+                (
+                    f"\tPartial losses during {flag}:"
+                    f"\n\t\tStrike loss:{self.loss_tracker_t1.result()}"
+                    f"\n\t\tDerivative loss: {self.loss_tracker_t2.result()}"
+                    f"\n\t\tSteps loss: {self.loss_tracker_t3.result()}"
+                    f"\n\t\tTrivial loss: {self.loss_tracker_t4.result()}"
+                )
+            )
+        elif flag == "val":
+            print(
+                (
+                    f"\tPartial losses during {flag}:"
+                    f"\n\t\tStrike loss:{self.loss_tracker_t1_val.result()}"
+                    f"\n\t\tDerivative loss: {self.loss_tracker_t2_val.result()}"
+                    f"\n\t\tSteps loss: {self.loss_tracker_t3_val.result()}"
+                    f"\n\t\tTrivial loss: {self.loss_tracker_t4_val.result()}"
+                )
+            )
+            stored_new_model = self.evaluate_current_weights(tracked_loss = tracked_loss)
+            print(f"\tStored new weights ({flag}): {stored_new_model}")
         process = psutil.Process(os.getpid())
         memory_use = process.memory_info().rss / (1024 * 1024)
         print(f"\tMemory usage: {memory_use}")
-        stored_new_model = self.evaluate_current_weights(tracked_loss = tracked_loss)
-        print(f"\tStored new weights: {stored_new_model}")
+        
         
     def evaluate_current_weights(self, tracked_loss: float):
         if tracked_loss < self.min_tracked_loss:
@@ -424,8 +471,8 @@ class LgmSingleStep(tf.keras.Model):
     def get_best_loss(self):
         return self.min_tracked_loss
         
-    def get_tracked_loss(self):
-        return self.loss_tracker.result()        
+    def get_tracked_loss(self, flag: str = "train"):
+        return (self.loss_tracker.result() if flag == "train" else self.loss_tracker_val.result())
 
     def get_losses_internal(self):
         """_summary_

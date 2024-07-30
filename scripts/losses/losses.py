@@ -38,8 +38,8 @@ class Losses:
     def get_loss(t1: tf.Tensor, t2: tf.Tensor, L1: Any, L2: Any) -> tf.Tensor:
         t1 = TFUtils.custom_reshape(t1)
         t2 = TFUtils.custom_reshape(t2)
-        diff = t1 - t2
-        partial_loss = tf.where(diff > 1, L2(t1, t2), L1(diff))
+        diff = L1(t1 - t2)
+        partial_loss = tf.where(diff > 1, L2(t1, t2), diff)
         return partial_loss
 
     @staticmethod
@@ -53,11 +53,14 @@ class Losses:
         T: tf.Tensor,
         TM: tf.Tensor,
         batch_size: tf.float64,
+        betas: list,
         phi,
     ):
         L1 = tf.math.abs
         L2 = tf.math.squared_difference
-        betas = [1.0, 1.0, 1.0]
+        
+        betas_raw = tf.stack(betas)
+        betas = tf.nn.softmax(betas_raw)
 
         batch_size_int = tf.cast(batch_size, tf.int32)
         N_steps_int = tf.cast(N_steps, tf.int32)
@@ -67,15 +70,9 @@ class Losses:
         strike_loss = Losses.get_loss(
             t1=real_values, t2=predictions[:, -1], L1=L1, L2=L2
         )
-        not_valid_idx = tf.cast(
-            (real_values == 0),
-            dtype = tf.float64
-        )
+        
         batch_size_den_factor = (
-            tf.cast(
-                batch_size - tf.reduce_sum(not_valid_idx) + tf.constant(1e-5, dtype = tf.float64), 
-                dtype = tf.float64
-            )
+            tf.cast(batch_size, dtype = tf.float64)
         )
         strike_loss = tf.reduce_sum(strike_loss) / batch_size_den_factor
         
@@ -97,25 +94,25 @@ class Losses:
         predictions = tf.reshape(predictions, [-1])
         step_loss = Losses.get_loss(t1=v, t2=predictions, L1=L1, L2=L2)
         step_loss = tf.reshape(step_loss, og_shape)
-
         error_per_step = tf.cumsum(step_loss[:, 1:], axis=1)
         error_per_step = (
             tf.reduce_sum(error_per_step[:, -2])
-            / tf.cast(N_steps, dtype=tf.float64)
+            / tf.cast(N_steps - 1, dtype=tf.float64)
             /  batch_size_den_factor
         )
 
-        strike_loss *= betas[0]
+        """strike_loss *= betas[0]
         derivative_loss *= betas[1]
-        error_per_step *= betas[2]
-
+        error_per_step *= betas[2]"""
+        
         losses_trackers = {
             "t1": strike_loss,
             "t2": derivative_loss,
             "t3": error_per_step,
+            "t4": 0.0,
         }
-        loss_per_sample = strike_loss + derivative_loss + error_per_step
-
+        loss_per_sample = strike_loss + derivative_loss + error_per_step 
+        
         return loss_per_sample, losses_trackers, df_dxn
 
     @staticmethod
