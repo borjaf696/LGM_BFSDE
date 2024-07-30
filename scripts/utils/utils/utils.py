@@ -468,22 +468,26 @@ class Swap:
         return np.maximum(0, par_swap - K)
 
     @staticmethod
-    def positive_parswap_tf(xn, Ti, Tm, ct, period=6, K=0.03):
+    def positive_parswap_tf(xn, Ti, Tm, ct, period=6, K=0.03, nominal = 1):
         # Calculate par swap
         par_swap = Swap.par_swap(xn, Ti, Ti, Tm, ct, period)
         if par_swap.shape != ():
             # Concat zero mask for reduce max
-            return tf.reduce_max(
+            nominal_tf = tf.constant(nominal, dtype = tf.float64)
+            K_tf = tf.constant(K, dtype = tf.float64)
+            # For testing
+            return nominal_tf * tf.reduce_max(
                 tf.concat(
                     [
-                        tf.reshape(par_swap, (tf.shape(par_swap)[0], 1)) - K,
+                        tf.reshape(par_swap, (tf.shape(par_swap)[0], 1)) - K_tf,
                         tf.zeros((tf.shape(par_swap)[0], 1), dtype=par_swap.dtype),
                     ],
                     axis=1,
                 ),
                 axis=1,
             )
-        return max(par_swap - K, 0)
+        # Add the nominal for testing purposes
+        return max(nominal * (par_swap - K), 0)
 
     @staticmethod
     def density_normal(x, mu, var):
@@ -503,7 +507,7 @@ class IRS:
         return N * anuality_term * (par_swap - K)
 
     @staticmethod
-    def IRS_normalized(xn, T, Tm, ct, period=6, K=0.03):
+    def IRS_normalized(xn, T, Tm, ct, period=6, K=0.03, nominal = 1):
         # A(i,m)
         anuality_term = Swap.anuality_swap(xn, T, T, Tm, ct, period)
         # Par Swap
@@ -511,7 +515,7 @@ class IRS:
         # Numeraire
         N = ZeroBond.N_tensor(T, xn, ct)
         # Compose the IRS result
-        return N * anuality_term * (par_swap - K) / N
+        return nominal * N * anuality_term * (par_swap - K) / N
 
     @staticmethod
     def IRS_test_normalized(xn, t, Ti, Tm, ct, period=6, K=0.03):
@@ -526,7 +530,7 @@ class IRS:
 
     # TODO: Adapt
     @staticmethod
-    def IRS_test(xn, t, Ti, Tm, ct, period=6, K=0.03):
+    def IRS_test(xn, t, Ti, Tm, ct, period=6, K=0.03, nominal = 1):
         # A(i,m)
         anuality_term = Swap.anuality_swap(xn, t, Ti, Tm, ct, period)
         # Par Swap
@@ -534,7 +538,7 @@ class IRS:
         # Numeraire
         N = ZeroBond.N_tensor(t, xn, ct)
         # Compose the IRS result
-        return N * anuality_term * (par_swap - K)
+        return nominal * N * anuality_term * (par_swap - K)
 
 
 class Swaption:

@@ -103,8 +103,8 @@
     },
     "swaption":{
         "1":{
-            "layers": 12,
-            "hidden_units": 64
+            "layers": 6,
+            "hidden_units": 16
         },
         "2":{
             "layers": 8,

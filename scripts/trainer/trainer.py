@@ -95,6 +95,8 @@ def trainer(
     # Recalculate nsims
     batch_size = size_of_the_batch * N_steps
     batches = int(np.floor(nsims * N_steps / batch_size))
+    val_sims = max(nsims // 10, 100)
+    batches_val = int(np.floor(val_sims * N_steps / batch_size))
     # LGM model instance
     future_T = TM if TM is not None else T
     
@@ -183,6 +185,7 @@ def trainer(
             cond_loc,
             "sim"
         ]
+        # valid_sims = df_tmp.sim.unique()
         df_x_ = df_x_.loc[
             df_x_.sim.isin(valid_sims)
         ]
@@ -244,7 +247,26 @@ def trainer(
             delta_x = tf.reshape(delta_x, (nsims, N_steps))
             dataset = tf.data.Dataset.from_tensor_slices((x, delta_x))
             dataset = dataset.batch(size_of_the_batch)
+            # Validation
+            # Validation paths
+            df_x_val_, _ = simulate(
+                T=T,
+                N_steps=N_steps,
+                dim=dim,
+                sigma=sigma,
+                nsims=val_sims,
+            )
+            mc_paths_trans = df_x_val_[features].values
+            x_val = mc_paths_trans.astype(np.float64)
+            delta_x_val = df_x_val_.delta_x_0.values.astype(np.float64)
+            x_val = tf.reshape(
+                x_val, (val_sims, N_steps, 2)
+            )  # Num simulations, steps per simulation, t and x
+            delta_x_val = tf.reshape(delta_x_val, (val_sims, N_steps))
+            dataset_val = tf.data.Dataset.from_tensor_slices((x_val, delta_x_val))
+            dataset_val = dataset_val.batch(size_of_the_batch)
         print(f"{epoch}...", end="")
+        # Train
         for batch, (x_batch, delta_x_batch) in enumerate(dataset):
             Utils.print_progress_bar(
                 batch, batches, prefix="batches", suffix="|", length=50, fill="█"
@@ -255,12 +277,29 @@ def trainer(
             
             x = tf.cast(x_batch, dtype=tf.float64)
             delta_x = tf.cast(delta_x_batch, dtype=tf.float64)
-            loss, _, _, _ = lgm_single_step.fit_step(
+            loss, _, _, _, _= lgm_single_step.fit_step(
                 x=x,
                 delta_x=delta_x,
             )
+        # Validation
+        for batch, (x_batch, delta_x_batch) in enumerate(dataset_val):
+            Utils.print_progress_bar(
+                batch, batches_val, prefix="batches", suffix="|", length=50, fill="█"
+            )
+            local_batch_size = x_batch.shape[0]
+            x_batch = tf.reshape(x_batch, (N_steps * local_batch_size, 2))
+            delta_x_batch = tf.reshape(delta_x_batch, (N_steps * local_batch_size, 1))
+            
+            x = tf.cast(x_batch, dtype=tf.float64)
+            delta_x = tf.cast(delta_x_batch, dtype=tf.float64)
+            loss, _, _, _, _= lgm_single_step.fit_step(
+                x=x,
+                delta_x=delta_x,
+                apply_gradients = False
+            )
         if epoch % 1 == 0:
             lgm_single_step.plot_tracker_results(epoch)
+            lgm_single_step.plot_tracker_results(epoch, flag = "val")
         epoch += 1
         # Reset error trackers
         lgm_single_step.reset_trackers()
