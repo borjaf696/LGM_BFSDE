@@ -114,6 +114,50 @@ class Losses:
         loss_per_sample = strike_loss + derivative_loss + error_per_step 
         
         return loss_per_sample, losses_trackers, df_dxn
+    
+    @staticmethod
+    def adapted_loss_tf(
+        x: tf.Tensor,
+        v: tf.Tensor,
+        ct: tf.Tensor,
+        derivatives: tf.Tensor,
+        predictions: tf.Tensor,
+        N_steps: tf.float64,
+        T: tf.Tensor,
+        TM: tf.Tensor,
+        batch_size: tf.float64,
+        betas: list,
+        phi,
+    ):
+        L1 = tf.math.abs
+        L2 = tf.math.squared_difference
+        
+        betas_raw = tf.stack(betas)
+        betas = tf.nn.softmax(betas_raw)
+
+        batch_size_int = tf.cast(batch_size, tf.int32)
+        N_steps_int = tf.cast(N_steps, tf.int32)
+        x_reformat = tf.reshape(x[:, 0], [batch_size_int, N_steps_int])
+        real_values = phi(xn=x_reformat[:, -1], T=T, Tm=TM, ct=ct)
+
+        strike_loss = Losses.get_loss(
+            t1=real_values, t2=v[:, -1], L1=L1, L2=L2
+        )
+        
+        batch_size_den_factor = (
+            tf.cast(batch_size, dtype = tf.float64)
+        )
+        strike_loss = tf.reduce_sum(strike_loss) / batch_size_den_factor
+        
+        losses_trackers = {
+            "t1": strike_loss,
+            "t2": 0.0,
+            "t3": 0.0,
+            "t4": 0.0,
+        }
+        loss_per_sample = strike_loss 
+        
+        return loss_per_sample, losses_trackers, None
 
     @staticmethod
     def loss_lgm( 

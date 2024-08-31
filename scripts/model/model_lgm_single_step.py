@@ -327,7 +327,7 @@ class LgmSingleStep(tf.keras.Model):
         self, x: tf.Tensor, delta_x: tf.Tensor, apply_gradients: tf.bool = True
     ):
         with tf.GradientTape(persistent=False) as tape:
-            v, predictions, grads = self.predict_tf(x, delta_x=delta_x)
+            v, predictions, grads = self.predict_loop_tf(x, delta_x=delta_x)
             v = tf.reshape(v, (self.batch_size, self.N))
             predictions = tf.reshape(predictions, (self.batch_size, self.N))
             loss_values, losses_tracker, _ = Losses.loss_lgm_tf(
@@ -506,10 +506,10 @@ class LgmSingleStep(tf.keras.Model):
             grads_reshaped = tf.reshape(grads[:, 0], (samples, self.N))
             grads_prediction = grads[:, 0]
         else:
-            grads_reshaped = tf.zeros((samples, self.N))
-            grads_prediction = tf.zeros_like(x[:, 0])
-        t_grads_reshaped = tf.zeros((samples, self.N))
-        t_grads_prediction = tf.zeros_like(x[:, 0])
+            grads_reshaped = tf.zeros((samples, self.N), dtype = tf.float64)
+            grads_prediction = tf.zeros_like(x[:, 0], dtype = tf.float64)
+        t_grads_reshaped = tf.zeros((samples, self.N), dtype = tf.float64)
+        t_grads_prediction = tf.zeros_like(x[:, 0], dtype = tf.float64)
         self.grads = grads_reshaped
         return grads_reshaped, grads_prediction, t_grads_reshaped, t_grads_prediction
     

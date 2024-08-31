@@ -41,6 +41,41 @@ class LgmSingleStepNaive(LgmSingleStep):
 
         return v, predictions, grads_reshaped
     
+    
+    """
+    Second version of the model:
+    * Predicts the derivative of the product and not the product itself.
+    * We do not need the gradient of the NN anymore since we will use the prediction as it is.
+    * It uses the Loss.Adapted_loss
+    """
+    def predict_loop_tf(self, X: tf.Tensor, delta_x: tf.Tensor, build_masks: bool = False, debug: bool = False):
+        if self.normalize:
+            X_norm = (X - self.mean) / tf.sqrt(self.var + self.epsilon)
+        predictions = self.custom_model(X_norm if self.normalize else X)
+        predictions = tf.cast(predictions, dtype=tf.float64)
+        
+        grads_reshaped, _, _, _ = self._get_dv_dx_tf(X)
+        
+        batch_size = tf.cast(tf.shape(grads_reshaped)[0], dtype=tf.int32)
+        n_steps = tf.cast(tf.shape(grads_reshaped)[1], dtype=tf.int32)
+        delta_x_reshaped = tf.reshape(delta_x, (batch_size, n_steps))
+        predictions_reshaped = tf.reshape(predictions, (batch_size, n_steps))
+        
+        def step_fn(v_prev, i):
+            return v_prev + grads_reshaped[:, i - 1] * delta_x_reshaped[:, i]
+        
+        initial_value = predictions_reshaped[:, 0]
+        indices = tf.range(1, n_steps)
+        v = tf.scan(step_fn, indices, initializer=initial_value)
+        v = tf.transpose(v, perm=[1, 0])
+        
+        v = tf.concat([tf.expand_dims(initial_value, axis=1), v], axis=1)
+        v = tf.reshape(v, (batch_size * n_steps, 1))
+        
+        return v, predictions, grads_reshaped
+
+
+    
     def predict(self, 
         X:tf.Tensor, 
         delta_x:tf.Tensor,
