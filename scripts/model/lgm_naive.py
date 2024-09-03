@@ -44,8 +44,10 @@ class LgmSingleStepNaive(LgmSingleStep):
     
     """
     Second version of the model:
-    * Predicts the derivative of the product and not the product itself.
-    * We do not need the gradient of the NN anymore since we will use the prediction as it is.
+    * The v process starts from p_0 = v_0 and then continues by p_i as the gradient.
+    * The prediction in this case represents:
+        * p_0 -> the first v_0 value
+        * p_i -> represents the derivative at each time (i - 1)
     * It uses the Loss.Adapted_loss
     """
     def predict_loop_tf(self, X: tf.Tensor, delta_x: tf.Tensor, build_masks: bool = False, debug: bool = False):
@@ -54,15 +56,19 @@ class LgmSingleStepNaive(LgmSingleStep):
         predictions = self.custom_model(X_norm if self.normalize else X)
         predictions = tf.cast(predictions, dtype=tf.float64)
         
-        grads_reshaped, _, _, _ = self._get_dv_dx_tf(X)
-        
-        batch_size = tf.cast(tf.shape(grads_reshaped)[0], dtype=tf.int32)
-        n_steps = tf.cast(tf.shape(grads_reshaped)[1], dtype=tf.int32)
+        n_steps = tf.cast(self.N, dtype=tf.int32)
+
+        # grads_reshaped, _, _, _ = self._get_dv_dx_tf(X)
+        batch_size_local = tf.cast(tf.shape(predictions)[0] // n_steps, dtype=tf.int32)
+        batch_size = tf.cast(self.batch_size, dtype=tf.int32)
+        batch_size = tf.maximum(batch_size, batch_size_local)
+
         delta_x_reshaped = tf.reshape(delta_x, (batch_size, n_steps))
         predictions_reshaped = tf.reshape(predictions, (batch_size, n_steps))
         
         def step_fn(v_prev, i):
-            return v_prev + grads_reshaped[:, i - 1] * delta_x_reshaped[:, i]
+            # return v_prev + grads_reshaped[:, i - 1] * delta_x_reshaped[:, i]
+            return v_prev + predictions_reshaped[:, i] * delta_x_reshaped[:, i]
         
         initial_value = predictions_reshaped[:, 0]
         indices = tf.range(1, n_steps)
@@ -72,7 +78,7 @@ class LgmSingleStepNaive(LgmSingleStep):
         v = tf.concat([tf.expand_dims(initial_value, axis=1), v], axis=1)
         v = tf.reshape(v, (batch_size * n_steps, 1))
         
-        return v, predictions, grads_reshaped
+        return v, predictions, tf.zeros_like(predictions_reshaped)
 
 
     

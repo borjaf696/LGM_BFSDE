@@ -154,7 +154,7 @@ class LgmSingleStep(tf.keras.Model):
         self.beta3 = tf.Variable(1.0, trainable=False, dtype=tf.float64, name='beta3')
         self.beta4 = tf.Variable(1.0, trainable=False, dtype=tf.float64, name='beta4')
         # Set the loss function
-        self.loss_lgm = Losses.loss_lgm_tf
+        self.loss_lgm = Losses.adapted_loss_tf
         # Train Metrics tracker
         self.loss_tracker = tf.keras.metrics.Mean(name="total_loss")
         # Train Internal management
@@ -330,7 +330,7 @@ class LgmSingleStep(tf.keras.Model):
             v, predictions, grads = self.predict_loop_tf(x, delta_x=delta_x)
             v = tf.reshape(v, (self.batch_size, self.N))
             predictions = tf.reshape(predictions, (self.batch_size, self.N))
-            loss_values, losses_tracker, _ = Losses.loss_lgm_tf(
+            loss_values, losses_tracker, _ = Losses.adapted_loss_tf(
                 x=x,
                 v=v,
                 ct=self.ct,

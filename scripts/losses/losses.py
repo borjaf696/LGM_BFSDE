@@ -131,9 +131,6 @@ class Losses:
     ):
         L1 = tf.math.abs
         L2 = tf.math.squared_difference
-        
-        betas_raw = tf.stack(betas)
-        betas = tf.nn.softmax(betas_raw)
 
         batch_size_int = tf.cast(batch_size, tf.int32)
         N_steps_int = tf.cast(N_steps, tf.int32)
@@ -143,6 +140,13 @@ class Losses:
         strike_loss = Losses.get_loss(
             t1=real_values, t2=v[:, -1], L1=L1, L2=L2
         )
+
+        """if tf.reduce_mean(strike_loss) < 1.0:
+            print(f"\nReal values: {real_values[:10]}")
+            print(f"V: {v[:10, -1]}")
+            print(f"Strike loss: {strike_loss[:10]}")
+            import sys
+            sys.exit()"""
         
         batch_size_den_factor = (
             tf.cast(batch_size, dtype = tf.float64)

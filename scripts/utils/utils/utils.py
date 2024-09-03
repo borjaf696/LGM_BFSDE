@@ -468,26 +468,30 @@ class Swap:
         return np.maximum(0, par_swap - K)
 
     @staticmethod
-    def positive_parswap_tf(xn, Ti, Tm, ct, period=6, K=0.03, nominal = 1):
+    def positive_parswap_tf(xn, Ti, Tm, ct, period=6, K=0.03, nominal = 1, smoothed = False, epsilon=tf.constant(1e-6, dtype = tf.float64)):
         # Calculate par swap
         par_swap = Swap.par_swap(xn, Ti, Ti, Tm, ct, period)
         if par_swap.shape != ():
             # Concat zero mask for reduce max
             nominal_tf = tf.constant(nominal, dtype = tf.float64)
             K_tf = tf.constant(K, dtype = tf.float64)
-            # For testing
-            return nominal_tf * tf.reduce_max(
-                tf.concat(
-                    [
-                        tf.reshape(par_swap, (tf.shape(par_swap)[0], 1)) - K_tf,
-                        tf.zeros((tf.shape(par_swap)[0], 1), dtype=par_swap.dtype),
-                    ],
+
+            if smoothed:
+                soft_max = tf.sqrt((par_swap - K_tf)**2 + epsilon) - tf.sqrt(epsilon)
+                return nominal_tf * soft_max
+            else:
+                return nominal_tf * tf.reduce_max(
+                    tf.concat(
+                        [
+                            tf.reshape(par_swap, (tf.shape(par_swap)[0], 1)) - K_tf,
+                            tf.zeros((tf.shape(par_swap)[0], 1), dtype=par_swap.dtype),
+                        ],
+                        axis=1,
+                    ),
                     axis=1,
-                ),
-                axis=1,
-            )
+                )
         # Add the nominal for testing purposes
-        return max(nominal * (par_swap - K), 0)
+        return (nominal * (tf.sqrt((par_swap - K)**2 + epsilon) - tf.sqrt(epsilon))) if smoothed else max(nominal * (par_swap - K), 0)
 
     @staticmethod
     def density_normal(x, mu, var):
