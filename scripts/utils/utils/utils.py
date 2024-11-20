@@ -4,8 +4,6 @@ import warnings
 import tensorflow as tf
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 from scipy.stats import norm
 from typing import Any, List, Dict
@@ -468,14 +466,32 @@ class Swap:
         return np.maximum(0, par_swap - K)
 
     @staticmethod
-    def positive_parswap_tf(xn, Ti, Tm, ct, period=6, K=0.03, nominal = 1):
-        # Calculate par swap
+    def positive_parswap_tf(xn, Ti, Tm, ct, period=6, K=0.03, nominal=10000, smoothed=True, alpha = tf.constant(0.001, dtype = tf.float64)):
         par_swap = Swap.par_swap(xn, Ti, Ti, Tm, ct, period)
-        if par_swap.shape != ():
-            # Concat zero mask for reduce max
-            nominal_tf = tf.constant(nominal, dtype = tf.float64)
-            K_tf = tf.constant(K, dtype = tf.float64)
-            # For testing
+        nominal_tf = tf.constant(nominal, dtype=tf.float64)
+        K_tf = tf.constant(K, dtype=tf.float64)
+        if tf.rank(par_swap) == 0:
+            try:
+                par_swap = tf.reshape(par_swap, (1,tf.shape(par_swap)[0]))
+            except Exception as e:
+                par_swap = tf.reshape(par_swap, (1,1))
+        if smoothed:
+            soft_max = tf.math.log(
+                tf.reduce_sum(
+                    tf.concat(
+                        [
+                            tf.exp(
+                                (tf.reshape(par_swap, (tf.shape(par_swap)[0], 1)) - K_tf) / alpha
+                            ),
+                            tf.exp(tf.zeros((tf.shape(par_swap)[0], 1), dtype=par_swap.dtype)),
+                        ],
+                        axis=1,
+                    ),
+                    axis=1,
+                )
+            )
+            return nominal_tf * soft_max
+        else:
             return nominal_tf * tf.reduce_max(
                 tf.concat(
                     [
@@ -486,8 +502,6 @@ class Swap:
                 ),
                 axis=1,
             )
-        # Add the nominal for testing purposes
-        return max(nominal * (par_swap - K), 0)
 
     @staticmethod
     def density_normal(x, mu, var):
@@ -557,7 +571,7 @@ class Swaption:
             positive_par_swap = Swap.positive_parswap_tf(
                 xn=xn, Ti=Ti, Tm=Tm, ct=ct, period=period, K=K
             )
-            return positive_par_swap
+            return float(positive_par_swap)
 
         import scipy.integrate as integrate
 
@@ -761,86 +775,6 @@ class TestExamples:
     def strike_test(xn, T, Tm, ct, period=None, K=None):
         return tf.math.exp(xn)
 
-
-class VisualizationHelper:
-    @staticmethod
-    def plot_time_series(df, x, value_column, title="Results", xlabel="Xt", ylabel="Y"):
-        """
-        Grafica una serie de tiempo usando seaborn y matplotlib.
-
-        :param df: DataFrame de Pandas que contiene la serie de tiempo.
-        :param date_column: Nombre de la columna en df que contiene las fechas.
-        :param value_column: Nombre de la columna en df que contiene los valores.
-        :param title: Título del gráfico.
-        :param xlabel: Etiqueta del eje X.
-        :param ylabel: Etiqueta del eje Y.
-        """
-        sns.set(style="darkgrid")
-
-        plt.figure(figsize=(6, 6))
-        sns.lineplot(data=df, x=x, y=value_column)
-        plt.title(title)
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-
-        # Mostrar el gráfico
-        plt.show()
-
-    @staticmethod
-    def plot_multiple_series(
-        df, x, values_column, title="Results", xlabel="Xt", ylabel="Y"
-    ):
-        """
-        Grafica una serie de tiempo usando seaborn y matplotlib.
-
-        :param df: DataFrame de Pandas que contiene la serie de tiempo.
-        :param date_column: Nombre de la columna en df que contiene las fechas.
-        :param value_column: Nombre de la columna en df que contiene los valores.
-        :param title: Título del gráfico.
-        :param xlabel: Etiqueta del eje X.
-        :param ylabel: Etiqueta del eje Y.
-        """
-        sns.set(style="darkgrid")
-
-        plt.figure(figsize=(10, 4))
-        for y in values_column:
-            sns.lineplot(data=df, x=x, y=y, label=y)
-        plt.title(title)
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-        plt.legend()
-
-        # Mostrar el gráfico
-        plt.show()
-    
-    @staticmethod
-    def plot_serie(
-        df, x, y, title="Results", xlabel="Xt", ylabel="Y", hue = None
-    ):
-        """
-        Grafica una serie de tiempo usando seaborn y matplotlib.
-
-        :param df: DataFrame de Pandas que contiene la serie de tiempo.
-        :param date_column: Nombre de la columna en df que contiene las fechas.
-        :param value_column: Nombre de la columna en df que contiene los valores.
-        :param title: Título del gráfico.
-        :param xlabel: Etiqueta del eje X.
-        :param ylabel: Etiqueta del eje Y.
-        """
-        sns.set(style="darkgrid")
-
-        plt.figure(figsize=(10, 4))
-        if hue is None:
-            sns.lineplot(data=df, x=x, y=y, label=y)
-        else:
-            sns.lineplot(data=df, x=x, y=y, hue = hue)
-        plt.title(title)
-        plt.xlabel(xlabel)
-        plt.ylabel(ylabel)
-        plt.legend()
-
-        # Mostrar el gráfico
-        plt.show()
 
 
 class GPUUtils:

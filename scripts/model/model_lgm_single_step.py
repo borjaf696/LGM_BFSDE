@@ -89,8 +89,6 @@ class LgmSingleStep(tf.keras.Model):
         print(f"Batch size: {self.batch_size}")
         print(f"Expected sample size: {self.expected_sample_size}")
         print(f"{'#'*100}")
-        # Model with time and value
-        input_tmp = keras.Input(shape=(dim,), name=self.name_internal)
         if self.normalize:
             # Normalizer
             start_normalization_time = time.time()
@@ -113,6 +111,8 @@ class LgmSingleStep(tf.keras.Model):
                 f"[Normalization] Normalization time: {end_normalization_time - start_normalization_time}s"
             )
         # Set first layer
+        # Model with time and value
+        input_tmp = keras.Input(shape=(dim,), name=self.name_internal)
         x = input_tmp
         # Configuration read from:
         # --- name
@@ -154,7 +154,7 @@ class LgmSingleStep(tf.keras.Model):
         self.beta3 = tf.Variable(1.0, trainable=False, dtype=tf.float64, name='beta3')
         self.beta4 = tf.Variable(1.0, trainable=False, dtype=tf.float64, name='beta4')
         # Set the loss function
-        self.loss_lgm = Losses.loss_lgm_tf
+        self.loss_lgm = Losses.adapted_loss_tf
         # Train Metrics tracker
         self.loss_tracker = tf.keras.metrics.Mean(name="total_loss")
         # Train Internal management
@@ -178,7 +178,7 @@ class LgmSingleStep(tf.keras.Model):
         # Create masks
         self.__create_masks()
         # Tracked best model
-        self.min_tracked_loss = 99999999
+        self.min_tracked_loss = 999999999999
         self.best_weights = None
         # Verbose
         self.verbose = verbose
@@ -327,10 +327,10 @@ class LgmSingleStep(tf.keras.Model):
         self, x: tf.Tensor, delta_x: tf.Tensor, apply_gradients: tf.bool = True
     ):
         with tf.GradientTape(persistent=False) as tape:
-            v, predictions, grads = self.predict_tf(x, delta_x=delta_x)
+            v, predictions, grads = self.predict_loop_tf(x, delta_x=delta_x)
             v = tf.reshape(v, (self.batch_size, self.N))
             predictions = tf.reshape(predictions, (self.batch_size, self.N))
-            loss_values, losses_tracker, _ = Losses.loss_lgm_tf(
+            loss_values, losses_tracker, _ = Losses.adapted_loss_tf(
                 x=x,
                 v=v,
                 ct=self.ct,
@@ -506,10 +506,10 @@ class LgmSingleStep(tf.keras.Model):
             grads_reshaped = tf.reshape(grads[:, 0], (samples, self.N))
             grads_prediction = grads[:, 0]
         else:
-            grads_reshaped = tf.zeros((samples, self.N))
-            grads_prediction = tf.zeros_like(x[:, 0])
-        t_grads_reshaped = tf.zeros((samples, self.N))
-        t_grads_prediction = tf.zeros_like(x[:, 0])
+            grads_reshaped = tf.zeros((samples, self.N), dtype = tf.float64)
+            grads_prediction = tf.zeros_like(x[:, 0], dtype = tf.float64)
+        t_grads_reshaped = tf.zeros((samples, self.N), dtype = tf.float64)
+        t_grads_prediction = tf.zeros_like(x[:, 0], dtype = tf.float64)
         self.grads = grads_reshaped
         return grads_reshaped, grads_prediction, t_grads_reshaped, t_grads_prediction
     

@@ -1,0 +1,1 @@
+nohup hatch run python scripts/launcher.py --T 1 --TM 2 --phi swaption --nsteps 48 --nepochs 50 --sigma 0.01 --schema 1 --nsims 128000 --normalize True --device gpu --batch_size 8 --device_num 2 --decay 1.0 --device gpu --save True
