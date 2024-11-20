@@ -60,8 +60,7 @@ class LgmSingleStepNaive(LgmSingleStep):
 
         # grads_reshaped, _, _, _ = self._get_dv_dx_tf(X)
         batch_size_local = tf.cast(tf.shape(predictions)[0] // n_steps, dtype=tf.int32)
-        batch_size = tf.cast(self.batch_size, dtype=tf.int32)
-        batch_size = tf.maximum(batch_size, batch_size_local)
+        batch_size = batch_size_local
 
         delta_x_reshaped = tf.reshape(delta_x, (batch_size, n_steps))
         predictions_reshaped = tf.reshape(predictions, (batch_size, n_steps))
@@ -79,7 +78,6 @@ class LgmSingleStepNaive(LgmSingleStep):
         v = tf.reshape(v, (batch_size * n_steps, 1))
         
         return v, predictions, tf.zeros_like(predictions_reshaped)
-
 
     
     def predict(self, 

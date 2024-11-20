@@ -89,8 +89,6 @@ class LgmSingleStep(tf.keras.Model):
         print(f"Batch size: {self.batch_size}")
         print(f"Expected sample size: {self.expected_sample_size}")
         print(f"{'#'*100}")
-        # Model with time and value
-        input_tmp = keras.Input(shape=(dim,), name=self.name_internal)
         if self.normalize:
             # Normalizer
             start_normalization_time = time.time()
@@ -113,6 +111,8 @@ class LgmSingleStep(tf.keras.Model):
                 f"[Normalization] Normalization time: {end_normalization_time - start_normalization_time}s"
             )
         # Set first layer
+        # Model with time and value
+        input_tmp = keras.Input(shape=(dim,), name=self.name_internal)
         x = input_tmp
         # Configuration read from:
         # --- name
@@ -178,7 +178,7 @@ class LgmSingleStep(tf.keras.Model):
         # Create masks
         self.__create_masks()
         # Tracked best model
-        self.min_tracked_loss = 99999999
+        self.min_tracked_loss = 999999999999
         self.best_weights = None
         # Verbose
         self.verbose = verbose
